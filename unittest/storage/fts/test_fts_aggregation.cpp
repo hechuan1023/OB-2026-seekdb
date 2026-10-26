@@ -3,14 +3,49 @@
  */
 
 #include <gtest/gtest.h>
+#include <map>
+#include <string>
 #include "storage/fts/ob_fts_stop_word.h"
 #include "data_plane/fts/ob_fts_parser_property.h"
+#include "share/text_analysis/ob_text_analyzer.h"
 
 using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace storage {
 namespace {
+TEST(FTSTextAnalysisTest, normalization_and_grouping_preserve_retained_tokens)
+{
+  const std::string long_word(4096, 'x');
+  const std::string input = "lower MIXED xÉx lower 123 " + long_word + " LOWER";
+  const std::map<std::string, int64_t> expected = {
+      {"lower", 3}, {"mixed", 1}, {"xéx", 1}, {"123", 1}, {long_word, 1}};
+  for (const auto collation : {CS_TYPE_UTF8MB4_GENERAL_CI, CS_TYPE_UTF8MB4_BIN}) {
+    for (const bool grouping : {false, true}) {
+      ObArenaAllocator allocator;
+      share::ObTextAnalysisCtx ctx;
+      ctx.cs_ = ObCharset::get_charset(collation);
+      ctx.filter_stopword_ = false;
+      ctx.need_grouping_ = grouping;
+      share::ObEnglishTextAnalyzer analyzer;
+      ASSERT_EQ(OB_SUCCESS, analyzer.init(ctx, allocator));
+      ObDatum document;
+      document.set_string(input.data(), input.size());
+      share::ObITokenStream *stream = nullptr;
+      ASSERT_EQ(OB_SUCCESS, analyzer.analyze(document, stream));
+      std::map<std::string, int64_t> actual;
+      ObDatum token;
+      int64_t frequency = 0;
+      int ret = OB_SUCCESS;
+      while (OB_SUCCESS == (ret = stream->get_next(token, frequency))) {
+        actual[std::string(token.ptr_, token.len_)] += frequency;
+      }
+      EXPECT_EQ(OB_ITER_END, ret);
+      EXPECT_EQ(expected, actual);
+    }
+  }
+}
+
 class FTSAggregationTest : public testing::Test
 {
 protected:
