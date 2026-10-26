@@ -44,6 +44,27 @@ namespace oceanbase
 namespace storage
 {
 
+/**
+ * @brief Binary comparison of two words, equivalent to
+ *        ObCharset::strcmp(CS_TYPE_UTF8MB4_BIN, left, right).
+ *
+ * The binary collation handler (ob_strnncoll_mb_bin) compares the bytes of
+ * the shorter word and then falls back to the length difference. The range
+ * lookup runs once per character on the tokenizer hot path, so the charset
+ * dispatch is worth avoiding.
+ */
+static inline int ob_ft_bin_word_cmp(const common::ObString &left, const common::ObString &right)
+{
+  if (left.empty()) {
+    return right.empty() ? 0 : -1;
+  } else if (right.empty()) {
+    return 1;
+  }
+  const int64_t len = OB_MIN(left.length(), right.length());
+  const int cmp = memcmp(left.ptr(), right.ptr(), len);
+  return cmp ? cmp : static_cast<int>(left.length() - right.length());
+}
+
 
 int ObFTRangeDict::build_cache_from_ik_dict(const ObFTDictDesc &desc, ObFTCacheRangeContainer &range_container)
 {
@@ -383,14 +404,8 @@ int ObFTRangeDict::find_first_char_range(const ObString &single_word, ObIFTDict 
   int ret = OB_SUCCESS;
   bool found = false;
   for (int i = 0; OB_SUCC(ret) && !found && i < range_dicts_.size(); ++i) {
-    if (ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                          range_dicts_[i].start_.get_word(),
-                          single_word)
-            <= 0
-        && ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                             range_dicts_[i].end_.get_word(),
-                             single_word)
-               >= 0) {
+    if (ob_ft_bin_word_cmp(range_dicts_[i].start_.get_word(), single_word) <= 0
+        && ob_ft_bin_word_cmp(range_dicts_[i].end_.get_word(), single_word) >= 0) {
       dict = range_dicts_[i].dict_;
       found = true;
     }
