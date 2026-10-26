@@ -10,7 +10,7 @@ import random
 import subprocess
 
 
-def capture(client, port):
+def capture(client, port, *, row_count=300):
     def sql(statements):
         result = subprocess.run(
             [client, "-h127.0.0.1", "-P" + str(port), "-uroot", "-N", "-B", "--raw",
@@ -46,7 +46,7 @@ def capture(client, port):
         "USE fts_semantics_regression; CREATE TABLE docs(id INT PRIMARY KEY, body TEXT, english TEXT,"
         " FULLTEXT INDEX cn(body) WITH PARSER ik, FULLTEXT INDEX en(english) WITH PARSER beng);")
     values = []
-    for identity in range(300):
+    for identity in range(row_count):
         text = ["数据库 数据库 全文索引", "全文检索 查询 优化", "数据库连接 网络超时", "无关文档"][identity % 4]
         english = ["alpha alpha beta", "beta gamma", "database search engine", "unrelated"][identity % 4]
         values.append("(%d,%s,%s)" % (identity, literal(text), literal(english)))
@@ -60,7 +60,8 @@ def capture(client, port):
         elif phase == 2:
             sql("DELETE FROM fts_semantics_regression.docs WHERE id % 11=0;")
         elif phase == 3:
-            sql("INSERT INTO fts_semantics_regression.docs VALUES(400,'数据库 全文索引','alpha beta gamma');")
+            sql("INSERT INTO fts_semantics_regression.docs VALUES(%d,'数据库 全文索引','alpha beta gamma');"
+                % (row_count + 100))
         statements = ["USE fts_semantics_regression;"]
         for column, query in queries:
             score = "MATCH(%s) AGAINST(%s)" % (column, literal(query))
@@ -76,5 +77,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--client", required=True)
     parser.add_argument("--port", required=True, type=int)
+    parser.add_argument("--rows", type=int, default=300,
+                        help="use 2300 or more rows to exercise multiple TAAT partitions")
     args = parser.parse_args()
-    print(json.dumps(capture(args.client, args.port), ensure_ascii=False, sort_keys=True))
+    if args.rows <= 0:
+        parser.error("--rows must be positive")
+    print(json.dumps(capture(args.client, args.port, row_count=args.rows),
+                     ensure_ascii=False, sort_keys=True))
