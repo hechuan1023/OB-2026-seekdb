@@ -327,19 +327,18 @@ int ObIKArbitrator::add_chain(ObIKTokenChain *chain)
     // The chains are produced in increasing start offset order. The hash map
     // that was used before kept the last chain for a repeated offset, so the
     // same is done here.
-    ObList<ObIKTokenChain *, ObIAllocator>::iterator iter = chains_.end();
+    bool replaced = false;
     if (!chains_.empty()) {
       ObList<ObIKTokenChain *, ObIAllocator>::iterator last = chains_.end();
       --last;
       if ((*last)->min_offset() == chain->min_offset()) {
-        iter = last;
+        *last = chain;
+        replaced = true;
       }
     }
-    if (OB_ISNULL(iter)) {
+    if (!replaced) {
       if (OB_FAIL(chains_.push_back(chain))) {
       }
-    } else {
-      *iter = chain;
     }
   }
   return ret;
