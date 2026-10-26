@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <map>
 #include <string>
+#include <vector>
 #include "storage/fts/ob_fts_stop_word.h"
 #include "data_plane/fts/ob_fts_parser_property.h"
 #include "share/text_analysis/ob_text_analyzer.h"
@@ -14,6 +15,34 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace storage {
 namespace {
+TEST(FTSTextAnalysisTest, ascii_delimiters_preserve_character_boundaries)
+{
+  for (const auto collation : {CS_TYPE_UTF8MB4_GENERAL_CI, CS_TYPE_UTF8MB4_BIN, CS_TYPE_BINARY}) {
+    const auto *cs = ObCharset::get_charset(collation);
+    ASSERT_NE(nullptr, cs);
+    for (int c = 0; c < 128; ++c) {
+      const std::string input = std::string("a") + static_cast<char>(c) + "b";
+      const bool delimiter = ob_isspace(cs, c) || ob_iscntrl(cs, c) || ob_ispunct(cs, c);
+      const std::vector<std::string> expected = delimiter
+          ? std::vector<std::string>{"a", "b"} : std::vector<std::string>{input};
+      share::ObTextWhitespaceTokenizer tokenizer;
+      ObDatum document;
+      document.set_string(input.data(), input.size());
+      ASSERT_EQ(OB_SUCCESS, tokenizer.open(document, cs));
+      std::vector<std::string> actual;
+      ObDatum token;
+      int64_t frequency = 0;
+      int ret = OB_SUCCESS;
+      while (OB_SUCCESS == (ret = tokenizer.get_next(token, frequency))) {
+        EXPECT_EQ(1, frequency);
+        actual.emplace_back(token.ptr_, static_cast<size_t>(token.len_));
+      }
+      EXPECT_EQ(OB_ITER_END, ret);
+      EXPECT_EQ(expected, actual) << "byte=" << c << " collation=" << collation;
+    }
+  }
+}
+
 TEST(FTSTextAnalysisTest, normalization_and_grouping_preserve_retained_tokens)
 {
   const std::string long_word(4096, 'x');
