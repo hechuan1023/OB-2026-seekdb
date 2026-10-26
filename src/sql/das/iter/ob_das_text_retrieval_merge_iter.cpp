@@ -1070,6 +1070,12 @@ int ObDASTRTaatIter::init_stores_by_partition()
     ret = OB_ERR_UNEXPECTED;
   } else {
     int64_t partition_cnt = force_return_docid_ ? 1 : OB_MIN((total_doc_cnt_- 1) / OB_HASHMAP_DEFAULT_SIZE + 1, OB_MAX_HASHMAP_COUNT);
+    // Each partition holds roughly total_doc_cnt_/partition_cnt distinct IDs.
+    // These maps do not grow automatically, so ten buckets would leave long
+    // collision chains for ordinary posting lists. Bound the reservation for
+    // large collections and the single-partition lookup path.
+    const int64_t bucket_count = OB_MAX(10L, OB_MIN(OB_HASHMAP_DEFAULT_SIZE,
+        (total_doc_cnt_ - 1) / partition_cnt + 1));
     hash_map_size_ = partition_cnt;
     void *buf = nullptr;
     if (nullptr == hash_maps_ && OB_SUCC(ret)) {
@@ -1100,7 +1106,7 @@ int ObDASTRTaatIter::init_stores_by_partition()
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
         ObDASTRTaatHashMap *hash_map = new(buf) ObDASTRTaatHashMap();
-        if (OB_FAIL(hash_map->create(10, common::ObMemAttr("FTTaatMap")))) {
+        if (OB_FAIL(hash_map->create(bucket_count, common::ObMemAttr("FTTaatMap")))) {
         } else {
           hash_maps_[i] = hash_map;
         }
@@ -1346,7 +1352,6 @@ int ObDASTRTaatIter::inner_load_next_hashmap()
 
   ObDocIdExt doc_id;
   double cur_relevance = 0;
-  double last_relevance = 0;
   while (OB_SUCC(ret)) {
     if (OB_FAIL(store_iter->get_next_row(*ctx, exprs))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -1357,12 +1362,13 @@ int ObDASTRTaatIter::inner_load_next_hashmap()
       } else if (need_relevance) {
         ObDatum &relevance_datum = relevance_expr->locate_expr_datum(*ir_rtdef_->eval_ctx_);
         cur_relevance = relevance_datum.get_double();
-        if (OB_FAIL(map->get_refactored(doc_id, last_relevance))) {
-          if (OB_HASH_NOT_EXIST != ret) {
-          } else if (OB_FAIL(map->set_refactored(doc_id, cur_relevance, 1/*overwrite*/))) {
-          }
-        } else if (OB_FAIL(map->set_refactored(doc_id, cur_relevance + last_relevance, 1/*overwrite*/))) {
-        }
+        struct AddRelevance {
+          explicit AddRelevance(double score) : score_(score) {}
+          void operator()(hash::HashMapPair<ObDocIdExt, double> &entry) const
+          { entry.second = score_ + entry.second; }
+          double score_;
+        } add_relevance(cur_relevance);
+        ret = map->set_or_update(doc_id, cur_relevance, add_relevance);
       } else {
         if (OB_FAIL(map->set_refactored(doc_id, 1, 0/*overwrite*/))) {
         }

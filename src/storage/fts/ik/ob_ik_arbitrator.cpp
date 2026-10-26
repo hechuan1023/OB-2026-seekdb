@@ -161,8 +161,8 @@ int ObIKArbitrator::output_result(TokenizeContext &ctx)
               // ignore
             }
           }
-          current += char_len;
         }
+        current += char_len;
       } else {
         chain = *chain_iter;
         for (ObList<ObIKToken, ObIAllocator>::const_iterator iter = chain->list().tokens().begin();
