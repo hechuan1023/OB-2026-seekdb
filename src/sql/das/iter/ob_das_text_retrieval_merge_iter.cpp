@@ -1206,6 +1206,7 @@ int ObDASTRTaatIter::fill_chunk_store_by_tr_iter()
             for (int64_t i = 0; i < hash_map_size_; ++i) {
               skips[i]->set_all(capacity);
             }
+            uint64_t populated_partitions = 0;
             for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
               ObExpr *doc_id_expr = ir_ctdef_->inv_scan_domain_id_col_;
               const ObDatum &doc_id_datum = doc_id_expr->locate_expr_datum(*ir_rtdef_->get_inv_idx_scan_rtdef()->eval_ctx_, i);
@@ -1214,11 +1215,16 @@ int ObDASTRTaatIter::fill_chunk_store_by_tr_iter()
               } else {
                 uint64_t partition = murmurhash(doc_id_datum.ptr_, doc_id_datum.len_, 0) % hash_map_size_;
                 skips[partition]->unset(i);
+                populated_partitions |= uint64_t{1} << partition;
               }
             }
             int64_t check_count = 0;
             // fill the datum_stores_
             for (int64_t i = 0; OB_SUCC(ret) && i < hash_map_size_; ++i) {
+              // Small vector batches usually leave many partitions empty.
+              // Preserve the partition order without calling the row-store
+              // serializer for an all-skipped batch.
+              if (0 == (populated_partitions & (uint64_t{1} << i))) { continue; }
               int64_t stored_rows_count = 0;
               if (OB_FAIL(datum_stores_[i]->add_batch(exprs,
                                                  *(ir_rtdef_->get_inv_idx_scan_rtdef()->eval_ctx_),
