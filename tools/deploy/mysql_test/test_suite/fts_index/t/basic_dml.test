@@ -1586,18 +1586,17 @@ CREATE TABLE fts_parser_name_test (
     content TEXT,
     FULLTEXT INDEX ctx(title, content)
 );
-let $rowkey_doc_table_id = query_get_value(SELECT table_id FROM oceanbase.__all_table WHERE index_type = 11 AND data_table_id = $data_table_id, table_id, 1);
-
-let $doc_rowkey_table_id = query_get_value(SELECT table_id FROM oceanbase.__all_table WHERE index_type = 12 AND data_table_id = $data_table_id, table_id, 1);
+# DROP/CREATE allocates a new table identity, including for its auxiliary tables.
+let $data_table_id = query_get_value(SELECT table_id FROM oceanbase.__all_table WHERE table_name = 'fts_parser_name_test' AND database_id = $database_id, table_id, 1);
+# Heap tables use their hidden increment primary key as the document id.
+# They must not create the rowkey/doc-id mapping tables used by explicit PKs.
+--replace_regex /data_table_id = [0-9]+/*/g
+eval SELECT COUNT(*) AS mapping_table_count FROM oceanbase.__all_table WHERE data_table_id = $data_table_id AND index_type IN (11, 12);
 
 let $fts_index_table_id = query_get_value(SELECT table_id FROM oceanbase.__all_table WHERE index_type = 13 AND data_table_id = $data_table_id, table_id, 1);
 
 let $doc_word_table_id = query_get_value(SELECT table_id FROM oceanbase.__all_table WHERE index_type = 14 AND data_table_id = $data_table_id, table_id, 1);
 
---replace_regex /table_id = [0-9]+/*/g  /_[0-9]+/_*/g
-eval SELECT column_name, is_hidden FROM oceanbase.__all_column WHERE table_id = $rowkey_doc_table_id;
---replace_regex /table_id = [0-9]+/*/g  /_[0-9]+/_*/g
-eval SELECT column_name, is_hidden FROM oceanbase.__all_column WHERE table_id = $doc_rowkey_table_id;
 --replace_regex /table_id = [0-9]+/*/g  /_[0-9]+/_*/g
 eval SELECT column_name, is_hidden FROM oceanbase.__all_column WHERE table_id = $fts_index_table_id;
 --replace_regex /table_id = [0-9]+/*/g  /_[0-9]+/_*/g

@@ -3866,29 +3866,20 @@ CREATE TABLE fts_parser_name_test (
     content TEXT,
     FULLTEXT INDEX ctx(title, content)
 );
+SELECT COUNT(*) AS mapping_table_count FROM oceanbase.__all_table WHERE * AND index_type IN (11, 12);
++---------------------+
+| mapping_table_count |
++---------------------+
+|                   0 |
++---------------------+
 
 
 
-
-SELECT column_name, is_hidden FROM oceanbase.__all_column WHERE *;
-+---------------------------+-----------+
-| column_name               | is_hidden |
-+---------------------------+-----------+
-| id                        |         0 |
-| __doc_id_*                |         0 |
-+---------------------------+-----------+
-SELECT column_name, is_hidden FROM oceanbase.__all_column WHERE *;
-+---------------------------+-----------+
-| column_name               | is_hidden |
-+---------------------------+-----------+
-| id                        |         0 |
-| __doc_id_*                |         0 |
-+---------------------------+-----------+
 SELECT column_name, is_hidden FROM oceanbase.__all_column WHERE *;
 +------------------------------------+-----------+
 | column_name                        | is_hidden |
 +------------------------------------+-----------+
-| __doc_id_*                         |         0 |
+| __pk_increment                     |         0 |
 | __word_segment_*_*                 |         0 |
 | __word_count_*_*                   |         0 |
 | __doc_length_*_*                   |         0 |
@@ -3897,7 +3888,7 @@ SELECT column_name, is_hidden FROM oceanbase.__all_column WHERE *;
 +------------------------------------+-----------+
 | column_name                        | is_hidden |
 +------------------------------------+-----------+
-| __doc_id_*                         |         0 |
+| __pk_increment                     |         0 |
 | __word_segment_*_*                 |         0 |
 | __word_count_*_*                   |         0 |
 | __doc_length_*_*                   |         0 |

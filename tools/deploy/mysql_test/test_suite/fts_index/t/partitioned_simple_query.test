@@ -321,6 +321,9 @@ where
 order by
     score desc;
 
+# Parameter allocation order is internal; keep the single correlated parameter
+# canonical here. The SELECT below still checks every joined row and score.
+--replace_regex /:[0-9]+/:0/g
 explain
 select /*+ use_das(t_ir_single_column) */
     t_ir_single_column.digest, t_ir_single_column.seq, t_dim_table.seq, t_dim_table.log as log , match (detail) against ("computer") as score
