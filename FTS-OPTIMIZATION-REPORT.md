@@ -424,3 +424,68 @@ WARMUP=30、SKIP_LOAD=0。以下为四轮指标中位数，不是官方得分。
 退化，且未改动的 BENG 指标也波动，不能宣称统计显著或保证官方增分。
 保留本候选供独立提测，前版分支不变。未修改任何官方计分资产。
 完整八份报告、快照与回归证据：_build/fts-validation-20261027-ikascii。
+
+
+## 2026-10-27：DAAT 过滤与批量结果写出
+
+基于 c84bbb9423cd07f413f14692fbda92d923c38216，分支 competition/fts-daat-output。
+本轮使用 cpu-clock:u 499 Hz 原生 perf 采样。前三类无 LIMIT 的基准查询实际经过
+storage/retrieval/ob_sparse_daat_iter.cpp；原中文查询中 filter_on_demand、
+calc_bool_expr_for_double_type、project_results 的 ReqWorker self 采样占比分别
+约 5.35%、4.01%、2.48%。CPU 采样比例不是端到端耗时，也不作为计分结果。
+
+最终修改：
+
+- 对精确的 BOOL(当前 double relevance 表达式) 直接应用原有非零判定，保留
+  BOOL 结果及 evaluated 标记。接受的分数在 project_results 中统一写出，
+  避免过滤阶段的重复写入；复杂条件、阈值和其他类型继续使用表达式求值。
+- 只有 ID 和所需分数都使用 batch frame 时，才批量定位输出 datums、填充值
+  并一次设置有效范围标记；标量和其他形态保留原路径。
+- BM25、归并、排序、LIMIT/OFFSET、分词规则及 AI 代码均未修改。
+
+首版仅消除通用 BOOL 调用和逐行输出标记。首版四组完整测试的三类等权结果为
+-1.78%，没有作为推荐提交。采样显示 filter_on_demand 仍有重复分数写入，
+据此形成上述最终版本。首版的全部测量保留于 _build/fts-validation-20261027-daat。
+
+最终版本验证：21 项现有 C++ 测试、修正后的 FTS 15/15、两套 AI SQL 回归、
+5 组 HTTP AI 回归和辅助表/关联参数独立检查全部通过。420 组 TOKENIZE、
+2,300 行数据的原 40 组 DML/查询与新增 224 组查询逐项匹配基线，包含
+裸 MATCH、分数阈值、Boolean mode、CASE 再次引用 MATCH、255/256/257 行
+边界、OFFSET、更新和删除后的精确分数/顺序。原两项回归脚本修复保留；
+没有把修改后的测试称为未经改动的官方原版。计分脚本、数据和 SQL 未变。
+
+性能使用保存的前版二进制与候选，各轮创建全新且配置一致的专用运行目录；
+四组顺序为 base/opt、opt/base、base/opt、opt/base。完整固定参数：
+ROWS=20000、BATCH=500、ROUNDS=3000、QUERY_ROUNDS=200、SAMPLES=3、
+WARMUP=30、SKIP_LOAD=0。每轮所有查询命中数均为 8001/11000/7332/20。
+最初一次复用语义检查目录的基线在 CREATE DATABASE 阶段超时，未进入计分
+阶段；其日志保留。随后两边统一改用全新目录，不混用该次失败样本。
+
+以下为最终版本四轮各指标中位数，与前一版相比，不是官方得分：
+
+| 指标 | 前版 | 候选 | 耗时下降 |
+| --- | ---: | ---: | ---: |
+| build_ik_all_sec | 8.15300 | 8.10350 | +0.61% |
+| build_ik_content_sec | 5.90450 | 5.91300 | -0.14% |
+| build_beng_en_sec | 3.14400 | 3.25250 | -3.45% |
+| tokenize_ik_avg_ms | 0.19870 | 0.17650 | +11.17% |
+| tokenize_beng_avg_ms | 0.13470 | 0.13755 | -2.12% |
+| query_cn_avg_ms | 1.72150 | 1.59055 | +7.61% |
+| query_beng_avg_ms | 2.55080 | 2.35630 | +7.63% |
+| query_mixed_avg_ms | 1.97030 | 1.84070 | +6.58% |
+| query_limit_avg_ms | 2.38665 | 2.46755 | -3.39% |
+
+三类平均提升率：构建 -1.00%，分词 +4.53%，查询 +4.60%；
+三类等权综合观察 +2.71%。中文查询四对均更快，英文与混合
+查询四对中三对更快。LIMIT 查询中位数退化，且未改动的分词指标也波动，
+不能把全部正负变化归因于此改动，不能保证正式 CI 增分。
+LIMIT 查询实际带相关度 Top-K，其主要耗时不在此次优化的过滤路径。
+本机仍有其他用户数据库服务，未停止它们。候选保留在独立分支，前版保留。
+
+最终八份报告、快照、回归、构建日志及辅助脚本位于
+_build/fts-validation-20261027-daat2；perf 记录保存于该目录的 profile 子目录。
+
+最终 CPU 复采样中，中文查询 project_results 的 ReqWorker self 占比从
+2.48% 降至 0.68%；英文从 2.65% 降至 0.67%。通用 double-to-BOOL 求值
+不再进入这些查询的 0.5% 以上热点列表。filter_on_demand 自身仍约占
+4%～5%，可继续研究批量过滤，但本轮不改变通用表达式执行契约。

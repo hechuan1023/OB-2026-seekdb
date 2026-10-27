@@ -71,6 +71,26 @@ def capture(client, port, *, row_count=300):
             statements.append("SELECT id,%s FROM docs WHERE %s>0 AND id%%3=0 "
                               "ORDER BY %s DESC,id LIMIT 17;" % (score, score, score))
         result["query_phase_%d" % phase] = sql("\n".join(statements))
+        # Exercise BOOL(MATCH), score predicates and output batch boundaries.
+        # Preserve query boundaries as well as every ID and exact score.
+        statements = ["USE fts_semantics_regression;"]
+        scores = ["MATCH(%s) AGAINST(%s)" % (column, literal(query))
+                  for column, query in queries]
+        scores += ["MATCH(english) AGAINST('+alpha -gamma' IN BOOLEAN MODE)",
+                   "MATCH(english) AGAINST('alpha beta' IN BOOLEAN MODE)"]
+        for index, score in enumerate(scores):
+            for size in [1, 20, 255, 256, 257]:
+                statements.append("SELECT 'plain_%d_%d';" % (index, size))
+                statements.append("SELECT id,%s FROM docs WHERE %s ORDER BY id LIMIT %d OFFSET 3;"
+                                  % (score, score, size))
+            for predicate in [score + ">0.01", "(" + score + ") AND id%3=0"]:
+                statements.append("SELECT 'predicate_%d';" % index)
+                statements.append("SELECT id,%s FROM docs WHERE %s ORDER BY id;" % (score, predicate))
+            statements.append("SELECT 'bool_projection_%d';" % index)
+            statements.append("SELECT id,%s,CASE WHEN %s THEN 'match' ELSE 'none' END "
+                              "FROM docs WHERE %s ORDER BY id LIMIT 257 OFFSET 3;"
+                              % (score, score, score))
+        result["query_batch_phase_%d" % phase] = sql("\n".join(statements))
     sql("DROP DATABASE fts_semantics_regression;")
     return result
 
