@@ -91,18 +91,23 @@ int ObTextDaaTIter::do_one_merge_round(int64_t &count)
   }
 
   int ret = OB_SUCCESS;
+  // init() allocates these arrays from the same dimension count. A merge
+  // round changes only their elements; it never grows or replaces a buffer.
+  ObISRDaaTDimIter *const *iters = dim_iters_->get_data();
+  const ObDatum **ids = iter_domain_ids_.get_data();
+  int64_t *next_iters = next_round_iter_idxes_.get_data();
   for (int64_t i = 0; OB_SUCC(ret) && i < next_round_cnt_; ++i) {
-    const int64_t idx = next_round_iter_idxes_[i];
-    ObISRDaaTDimIter *iter = dim_iters_->at(idx);
+    const int64_t idx = next_iters[i];
+    ObISRDaaTDimIter *iter = iters[idx];
     if (OB_ISNULL(iter)) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(iter->get_next_row())) {
       if (OB_ITER_END == ret) {
-        iter_domain_ids_[idx] = nullptr;
+        ids[idx] = nullptr;
         ret = OB_SUCCESS;
       }
-    } else if (OB_FAIL(iter->get_curr_id(iter_domain_ids_[idx]))) {
-    } else if (OB_ISNULL(iter_domain_ids_[idx])) {
+    } else if (OB_FAIL(iter->get_curr_id(ids[idx]))) {
+    } else if (OB_ISNULL(ids[idx])) {
       ret = OB_ERR_UNEXPECTED;
     }
   }
@@ -111,11 +116,12 @@ int ObTextDaaTIter::do_one_merge_round(int64_t &count)
   minimum.iter_idx_ = -1;
   uint64_t matches = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < dim_count; ++i) {
-    if (nullptr != iter_domain_ids_[i]) {
+    if (nullptr != ids[i]) {
       ObSRMergeItem item;
       item.iter_idx_ = i;
       int64_t cmp = -1;
-      if (minimum.iter_idx_ >= 0 && OB_FAIL(merge_cmp_.cmp(item, minimum, cmp))) {
+      if (minimum.iter_idx_ >= 0
+          && OB_FAIL(merge_cmp_.compare_ids(*ids[i], *ids[minimum.iter_idx_], cmp))) {
       } else if (cmp < 0) {
         minimum = item;
         matches = uint64_t(1) << i;
@@ -135,21 +141,21 @@ int ObTextDaaTIter::do_one_merge_round(int64_t &count)
       for (int64_t i = 0; OB_SUCC(ret) && i < dim_count; ++i) {
         if (0 != (matches & (uint64_t(1) << i))) {
           double score = 0.0;
-          if (OB_FAIL(dim_iters_->at(i)->get_curr_score(score))) {
+          if (OB_FAIL(iters[i]->get_curr_score(score))) {
           } else {
             if (nullptr != iter_param_->dim_weights_) {
               score *= iter_param_->field_boost_ * iter_param_->dim_weights_->at(i);
             }
             if (OB_FAIL(relevance_collector_->collect_one_dim(i, score))) {
             } else {
-              next_round_iter_idxes_[next_round_cnt_++] = i;
+              next_iters[next_round_cnt_++] = i;
             }
           }
         }
       }
       double relevance = 0.0;
       bool need_project = false;
-      const ObDatum &id = *iter_domain_ids_[minimum.iter_idx_];
+      const ObDatum &id = *ids[minimum.iter_idx_];
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(relevance_collector_->get_result(relevance, need_project))) {
       } else if (need_project && OB_FAIL(process_collected_row(id, relevance))) {

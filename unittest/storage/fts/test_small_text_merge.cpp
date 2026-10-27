@@ -2,6 +2,7 @@
  * Licensed under the Apache License, Version 2.0.
  */
 #include <gtest/gtest.h>
+#include <string>
 #include <vector>
 #include "storage/retrieval/ob_text_daat_iter.h"
 #include "sql/engine/ob_exec_context.h"
@@ -150,5 +151,69 @@ TEST_F(SmallTextMergeTest, posting_error_is_propagated)
   init(1);
   int64_t count = 0;
   EXPECT_EQ(OB_ERR_UNEXPECTED, iterator.get_next_rows(4, count));
+}
+
+TEST_F(SmallTextMergeTest, many_ids_keep_coverage_offset_limit_and_rescan_state)
+{
+  std::vector<int64_t> expected;
+  uint32_t random = 71;
+  for (int64_t value = 1; value <= 2049; ++value) {
+    int matches = 0;
+    for (auto &posting : postings) {
+      random = random * 1664525U + 1013904223U;
+      if ((random >> 16) % 3 == 0 && &posting != &postings[4]) {
+        posting.ids.push_back(value);
+        ++matches;
+      }
+    }
+    if (matches >= 2) expected.push_back(value);
+  }
+  ASSERT_GT(expected.size(), 100U);
+  expected = std::vector<int64_t>(expected.begin() + 17, expected.begin() + 54);
+  limit.offset_ = 17;
+  limit.limit_ = 37;
+  init(4, 2);
+  for (int capacity : {1, 2, 3, 4}) {
+    EXPECT_EQ(expected, read(capacity));
+    iterator.ObSRDaaTIterImpl::reuse();
+    for (auto &posting : postings) posting.cursor = -1;
+  }
+}
+
+TEST_F(SmallTextMergeTest, direct_ids_preserve_binary_null_and_padding_comparison)
+{
+  ObSRMergeCmp compare;
+  ObDatum left, right;
+  int64_t actual = 123;
+  EXPECT_EQ(OB_NOT_INIT, compare.compare_ids(left, right, actual));
+  ObFixedArray<const ObDatum *, ObIAllocator> ids;
+  ids.set_allocator(&allocator);
+  ASSERT_EQ(OB_SUCCESS, ids.init(2));
+  ASSERT_EQ(OB_SUCCESS, ids.prepare_allocate(2));
+  ids[0] = &left;
+  ids[1] = &right;
+  ObDatumMeta meta;
+  meta.type_ = ObVarcharType;
+  meta.cs_type_ = CS_TYPE_BINARY;
+  ASSERT_EQ(OB_SUCCESS, compare.init(meta, &ids));
+  ObSRMergeItem first, second;
+  first.iter_idx_ = 0;
+  second.iter_idx_ = 1;
+  const std::vector<std::string> values{"", "a", "a ", "a  ", "ab", "AB", "中", "é",
+      std::string("\0", 1), std::string("a\0b", 3), std::string("\xff", 1)};
+  for (const auto &a : values) {
+    for (const auto &b : values) {
+      for (int nulls = 0; nulls < 4; ++nulls) {
+        left.set_string(ObString(a.size(), a.data()));
+        right.set_string(ObString(b.size(), b.data()));
+        if (nulls & 1) left.set_null();
+        if (nulls & 2) right.set_null();
+        int64_t expected = 0;
+        ASSERT_EQ(OB_SUCCESS, compare.cmp(first, second, expected));
+        ASSERT_EQ(OB_SUCCESS, compare.compare_ids(left, right, actual));
+        EXPECT_EQ(expected, actual);
+      }
+    }
+  }
 }
 } // namespace
