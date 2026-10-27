@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <map>
 #include "storage/fts/ik/ob_ik_processor.h"
+#include "storage/fts/ik/ob_ik_arbitrator.h"
 #include <string>
 #include "storage/fts/ob_fts_stop_word.h"
 #include "data_plane/fts/ob_fts_parser_property.h"
@@ -15,6 +16,37 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace storage {
 namespace {
+TEST(FTSTextAnalysisTest, arbitration_preserves_lifo_order_beyond_inline_capacity)
+{
+  for (const int alternatives : {1, 16, 17, 40}) {
+    for (const bool smart : {false, true}) {
+      ObArenaAllocator allocator;
+      const std::string text(80, 'a');
+      TokenizeContext ctx(CS_TYPE_UTF8MB4_GENERAL_CI, allocator, text.data(), text.size(), smart);
+      ASSERT_EQ(OB_SUCCESS, ctx.init());
+      for (int length = 1; length <= alternatives; ++length) {
+        ASSERT_EQ(OB_SUCCESS, ctx.add_token(text.data(), 0, length, length, ObIKTokenType::IK_ENGLISH_TOKEN));
+      }
+      ASSERT_EQ(OB_SUCCESS, ctx.add_token(text.data(), 40, 40, 40, ObIKTokenType::IK_ENGLISH_TOKEN));
+      ObIKArbitrator arb;
+      ASSERT_EQ(OB_SUCCESS, arb.process(ctx));
+      ASSERT_EQ(OB_SUCCESS, arb.output_result(ctx));
+      ASSERT_EQ(smart ? 2 : alternatives + 1, ctx.result_list().size());
+      int index = 0;
+      for (const auto &token : ctx.result_list()) {
+        if (index == (smart ? 1 : alternatives)) {
+          EXPECT_EQ(40, token.offset_);
+          EXPECT_EQ(40, token.length_);
+        } else {
+          EXPECT_EQ(0, token.offset_);
+          EXPECT_EQ(alternatives - index, token.length_);
+        }
+        ++index;
+      }
+    }
+  }
+}
+
 TEST(FTSTextAnalysisTest, ik_character_path_matches_generic_decoder)
 {
   for (const auto collation : {CS_TYPE_UTF8MB4_GENERAL_CI, CS_TYPE_UTF8MB4_BIN,

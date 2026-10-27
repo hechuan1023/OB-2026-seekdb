@@ -55,6 +55,7 @@ public:
 
 public:
   ~ObIKToken() {}
+  TO_STRING_KV(K_(offset), K_(length), K_(char_cnt), K_(type));
   OB_INLINE bool operator==(const ObIKToken &token) const
   {
     return (offset_ == token.offset_ && length_ == token.length_);

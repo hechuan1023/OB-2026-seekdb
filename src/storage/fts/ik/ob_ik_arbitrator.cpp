@@ -232,7 +232,9 @@ int ObIKArbitrator::optimize(TokenizeContext &ctx,
   int ret = OB_SUCCESS;
 
   ObIKTokenChain *option = nullptr;
-  ObList<ObFTSortList::CellIter, ObIAllocator> conflict_stack(alloc_);
+  // Backtracking is strictly LIFO; small conflicts need no node allocations.
+  ObSEArray<ObFTSortList::CellIter, 16> conflict_stack(
+      OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc_));
 
   if (OB_ISNULL(option = OB_NEWx(ObIKTokenChain, &alloc_, alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -244,7 +246,7 @@ int ObIKArbitrator::optimize(TokenizeContext &ctx,
   } else if (OB_FAIL(best->copy(option))) {
   } else {
     while (OB_SUCC(ret) && !conflict_stack.empty()) {
-      ObFTSortList::CellIter iter = conflict_stack.get_last();
+      ObFTSortList::CellIter iter = conflict_stack.at(conflict_stack.count() - 1);
       conflict_stack.pop_back();
       if (OB_FAIL(remove_conflict(*iter, option))) {
       } else if (OB_FAIL(try_add_next_words(chain, iter, option, false, conflict_stack))) {
@@ -276,7 +278,7 @@ int ObIKArbitrator::try_add_next_words(ObIKTokenChain *chain,
                                        ObFTSortList::CellIter iter,
                                        ObIKTokenChain *option,
                                        bool need_conflict,
-                                       ObList<ObFTSortList::CellIter, ObIAllocator> &conflict_stack)
+                                       ObIArray<ObFTSortList::CellIter> &conflict_stack)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(chain) || OB_ISNULL(option)) {
