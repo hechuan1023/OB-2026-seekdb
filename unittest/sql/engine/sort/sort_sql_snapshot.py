@@ -9,7 +9,7 @@ import json
 import subprocess
 
 
-def capture(client, port, row_count=6000):
+def capture(client, port, row_count=6000, require_prefix_plan=False):
     def sql(statement):
         run = subprocess.run(
             [client, "-h127.0.0.1", "-P" + str(port), "-uroot", "-N", "-B", "--raw",
@@ -24,7 +24,8 @@ def capture(client, port, row_count=6000):
     sql("DROP DATABASE IF EXISTS sort_access_regression; CREATE DATABASE sort_access_regression;"
         "USE sort_access_regression; CREATE TABLE docs (id INT PRIMARY KEY, k INT, g INT, "
         "txt VARCHAR(100), payload LONGTEXT) CHARSET=utf8mb4;")
-    words = [None, "", "alpha", "Alpha", "ALPHA ", "école", "ecole", "数据库", "😀", "a  "]
+    words = [None, "", "alpha", "Alpha", "ALPHA ", "école", "ecole", "数据库", "😀", "a  ",
+             "\0", "a\0b"]
     values = []
     for i in range(row_count):
         number = None if i % 13 == 0 else (i * 37) % 97 - 48
@@ -39,6 +40,19 @@ def capture(client, port, row_count=6000):
         sql("INSERT INTO sort_access_regression.docs VALUES " + ",".join(rows) + ";")
     result = {}
     try:
+        sql("CREATE INDEX by_g ON sort_access_regression.docs(g);")
+        for collation in ["utf8mb4_bin", "utf8mb4_general_ci"]:
+            for direction in ["ASC", "DESC"]:
+                order = f"g,txt COLLATE {collation} {direction},k DESC,id"
+                select = ("SELECT /*+ INDEX(d by_g) OPT_PARAM('enable_newsort','%s') */ id "
+                          "FROM sort_access_regression.docs d ORDER BY " + order + ";")
+                expected = sql(select % "false")
+                actual = sql(select % "true")
+                assert actual == expected, (collation, direction, "encoded prefix sort")
+                if require_prefix_plan:
+                    plan = "\n".join(sql("EXPLAIN EXTENDED " + (select % "true"))).lower()
+                    assert "prefix_pos(1)" in plan, plan
+                result["prefix_" + collation + "_" + direction] = actual
         result["numeric"] = sql("SELECT id FROM sort_access_regression.docs ORDER BY k ASC,id DESC;")
         expected = [str(i) for i, number in sorted(
             values, key=lambda pair: (pair[1] is not None, pair[1] or 0, -pair[0]))]
@@ -71,6 +85,19 @@ def capture(client, port, row_count=6000):
             "WHERE a.id<40 AND b.id<60 ORDER BY a.id,b.id;")
         result["ci_rank"] = sql("SELECT id,DENSE_RANK() OVER(ORDER BY txt COLLATE utf8mb4_general_ci) "
                                 "FROM sort_access_regression.docs ORDER BY id;")
+        # Two large prefix groups exercise spilling with the documented 2M
+        # work area, including wide keys, NULLs and the remaining key columns.
+        sql("UPDATE sort_access_regression.docs SET g=id%2;")
+        select = ("SELECT /*+ INDEX(d by_g) OPT_PARAM('enable_newsort','%s') */ id "
+                  "FROM sort_access_regression.docs d ORDER BY g,payload DESC,k DESC,id;")
+        result["prefix_external"] = sql(select % "true")
+        assert result["prefix_external"] == sql(select % "false"), "external encoded prefix sort"
+        select = select.replace("payload DESC", "CAST(payload AS CHAR(2000)) COLLATE utf8mb4_bin DESC")
+        result["prefix_external_encoded"] = sql(select % "true")
+        assert result["prefix_external_encoded"] == sql(select % "false"), "external encoded varchar prefix sort"
+        if require_prefix_plan:
+            plan = "\n".join(sql("EXPLAIN EXTENDED " + (select % "true"))).lower()
+            assert "prefix_pos(1)" in plan, plan
     finally:
         sql("DROP DATABASE sort_access_regression;")
     return result
