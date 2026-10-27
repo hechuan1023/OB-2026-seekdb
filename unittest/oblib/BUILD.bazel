@@ -1,21 +1,16 @@
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
-load("//bazel:defs.bzl", "cc_library")
 
 package(default_testonly = True)
 
-cc_library(
-    name = "hnsw_serial_format_cases",
-    srcs = ["test_hnsw_serial_format.cpp"],
-    alwayslink = True,
-    deps = [
-        "//src/oblib:oblib_unit_test_internal_headers",
-        "@seekdb_3rd_headers//:gtest",
-    ],
-)
-
+# The third party header repository only ships libgtest, so the test carries
+# its own entry point and links oblib through the test only runtime.
 cc_test(
     name = "test_hnsw_serial_format",
+    srcs = ["test_hnsw_serial_format.cpp"],
     linkstatic = True,
-    deps = [":hnsw_serial_format_cases", "//src/oblib:oblib_test_runtime"],
-    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        "//src/oblib:oblib_unit_test_internal_headers",
+        "//src/oblib:oblib_test_runtime",
+        "@seekdb_3rd_headers//:gtest",
+    ],
 )
