@@ -59,6 +59,18 @@ def capture(client, port, row_count=6000):
                               "GROUP BY HEX(txt) ORDER BY COUNT(*) DESC,HEX(txt);")
         result["long_keys"] = sql("SELECT id FROM sort_access_regression.docs "
                                   "ORDER BY payload COLLATE utf8mb4_bin DESC,k,id;")
+        result["ci_long_keys"] = sql("SELECT id FROM sort_access_regression.docs "
+                                     "ORDER BY payload COLLATE utf8mb4_general_ci DESC,k,id;")
+        result["ci_group"] = sql("SELECT MIN(id),COUNT(*) FROM sort_access_regression.docs "
+                                 "GROUP BY txt COLLATE utf8mb4_general_ci ORDER BY MIN(id);")
+        result["ci_distinct"] = sql("SELECT COUNT(DISTINCT txt COLLATE utf8mb4_general_ci) "
+                                    "FROM sort_access_regression.docs;")
+        result["ci_join"] = sql(
+            "SELECT a.id,b.id FROM sort_access_regression.docs a JOIN sort_access_regression.docs b "
+            "ON a.txt COLLATE utf8mb4_general_ci=b.txt COLLATE utf8mb4_general_ci "
+            "WHERE a.id<40 AND b.id<60 ORDER BY a.id,b.id;")
+        result["ci_rank"] = sql("SELECT id,DENSE_RANK() OVER(ORDER BY txt COLLATE utf8mb4_general_ci) "
+                                "FROM sort_access_regression.docs ORDER BY id;")
     finally:
         sql("DROP DATABASE sort_access_regression;")
     return result
