@@ -1364,6 +1364,8 @@ OBLIB_HEADER_TARGETS = {
     },
     "oblib_vector": {
         "hdrs": [
+        "lib/vector/ob_gpu_hnsw_builder.h",
+        "lib/vector/ob_hnsw_serial_format.h",
         "lib/vector/ob_vector_util.h",
     ],
         "deps": [
@@ -1374,6 +1376,7 @@ OBLIB_HEADER_TARGETS = {
     },
     "oblib_vector_primitives": {
         "hdrs": [
+        "lib/vector/gpu/ob_gpu_hnsw_plugin.h",
         "lib/vector/ob_vsag_adaptor.h",
     ],
         "deps": [],
@@ -1771,6 +1774,9 @@ OBLIB_HEADER_TARGET_FOR_HEADER = {
     "lib/utility/ob_utility.h": ":oblib_foundation",
     "lib/utility/serialization.h": ":oblib_foundation_support",
     "lib/utility/utility.h": ":oblib_core_advanced",
+    "lib/vector/gpu/ob_gpu_hnsw_plugin.h": ":oblib_vector_primitives",
+    "lib/vector/ob_gpu_hnsw_builder.h": ":oblib_vector",
+    "lib/vector/ob_hnsw_serial_format.h": ":oblib_vector",
     "lib/vector/ob_vector_util.h": ":oblib_vector",
     "lib/vector/ob_vsag_adaptor.h": ":oblib_vector_primitives",
     "lib/wait_event/ob_inner_sql_wait_type.h": ":oblib_diagnostics_primitives",
