@@ -36,6 +36,8 @@ def verify(client, port, require_fast_path=False):
     plans = 0
     long_query = "alpha " + " ".join("term" + chr(97 + i // 26) + chr(97 + i % 26) for i in range(270))
     queries = ["alpha", "gamma", "alpha gamma", "alpha alpha gamma", "absentword",
+               "alpha beta", "alpha beta gamma", "alpha beta gamma delta",
+               "alpha beta gamma delta absentword", "absentword alpha beta gamma",
                "", "the and or", long_query]
     try:
         for query in queries:
@@ -79,6 +81,30 @@ def verify(client, port, require_fast_path=False):
             actual = sql(f"SELECT id FROM {db}.docs WHERE {score} ORDER BY id;")
             assert actual == [line.split("\t")[0] for line in expected]
             checked += 1
+
+        # Build indexes after loading data, so the posting scans also exercise
+        # persisted index rows and different document-ID/rowkey mappings.
+        layouts = [
+            ("heap_docs", "id INT, body TEXT", "id,body", "id", "id%5=0"),
+            ("composite_docs", "tenant INT, k VARCHAR(128), body TEXT, PRIMARY KEY(tenant,k)",
+             "id%3,CONCAT('文档-',id),body", "CONCAT(tenant,':',k)", "tenant=0"),
+        ]
+        for table, columns, values, identity, extra in layouts:
+            sql(f"USE {db}; CREATE TABLE {table}({columns});"
+                f"INSERT INTO {table} SELECT {values} FROM docs;"
+                f"ALTER TABLE {table} ADD FULLTEXT INDEX ft(body) WITH PARSER beng;")
+            for query in ["alpha", "alpha gamma", "alpha beta gamma delta",
+                          "alpha beta gamma delta absentword", "absentword", long_query]:
+                score = f"MATCH(body) AGAINST('{query}')"
+                for suffix in ["", " AND " + extra]:
+                    where = score + suffix
+                    expected = sql(f"SELECT {identity},{score} FROM {db}.{table} "
+                                   f"WHERE {where} ORDER BY {identity};")
+                    actual = sql(f"SELECT {identity} FROM {db}.{table} "
+                                 f"WHERE {where} ORDER BY {identity};")
+                    assert actual == [line.split("\t")[0] for line in expected], (table, query)
+                    assert sql(f"SELECT COUNT(*) FROM {db}.{table} WHERE {where};") == [str(len(actual))]
+                    checked += 2
     finally:
         sql(f"DROP DATABASE {db};")
     return {"queries_checked": checked, "fast_plans_checked": plans, "initial_rows": 1025}
