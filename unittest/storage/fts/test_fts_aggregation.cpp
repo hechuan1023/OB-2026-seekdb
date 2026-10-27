@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 #include <map>
+#include "storage/fts/ik/ob_ik_processor.h"
 #include <string>
 #include "storage/fts/ob_fts_stop_word.h"
 #include "data_plane/fts/ob_fts_parser_property.h"
@@ -14,6 +15,37 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace storage {
 namespace {
+TEST(FTSTextAnalysisTest, ik_character_path_matches_generic_decoder)
+{
+  for (const auto collation : {CS_TYPE_UTF8MB4_GENERAL_CI, CS_TYPE_UTF8MB4_BIN,
+                                CS_TYPE_UTF16_GENERAL_CI}) {
+    for (int byte = 0; byte <= 255; ++byte) {
+      const char input[] = {static_cast<char>(byte), 'A'};
+      for (int size = 1; size <= 2; ++size) {
+        ObArenaAllocator allocator;
+        int64_t expected_length = 0;
+        auto expected_type = ObFTCharUtil::CharType::USELESS;
+        int expected = ObCharset::first_valid_char(collation, input, size, expected_length);
+        if (expected == OB_SUCCESS) {
+          expected = ObFTCharUtil::classify_first_char(collation, input, expected_length, expected_type);
+        }
+        TokenizeContext ctx(collation, allocator, input, size, false);
+        ASSERT_EQ(expected, ctx.init()) << byte << " " << size << " " << collation;
+        if (expected == OB_SUCCESS) {
+          const char *actual = nullptr;
+          uint8_t length = 0;
+          auto type = ObFTCharUtil::CharType::USELESS;
+          ASSERT_EQ(OB_SUCCESS, ctx.current_char(actual, length));
+          ASSERT_EQ(OB_SUCCESS, ctx.current_char_type(type));
+          EXPECT_EQ(input, actual);
+          EXPECT_EQ(expected_length, length);
+          EXPECT_EQ(expected_type, type) << byte;
+        }
+      }
+    }
+  }
+}
+
 TEST(FTSTextAnalysisTest, normalization_and_grouping_preserve_retained_tokens)
 {
   const std::string long_word(4096, 'x');
