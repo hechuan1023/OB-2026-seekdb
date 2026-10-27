@@ -114,6 +114,39 @@ TEST_F(FTSAggregationTest, repeated_tokens_accumulate_without_replacing_keys)
   EXPECT_EQ(500, add.get_add_word_count());
 }
 
+TEST_F(FTSAggregationTest, lowercase_repeats_reuse_owned_key_without_allocating)
+{
+  ObAddWordFlag flags;
+  flags.set_casedown();
+  flags.set_groupby_word();
+  ObAddWord add(property_, meta_, flags, allocator_, words_);
+  char input[] = "database";
+  ASSERT_EQ(OB_SUCCESS, add.process_word(input, 8, 8, 7));
+  input[0] = 'X'; // the retained key must not alias the caller's buffer
+  EXPECT_EQ(1, count("database"));
+  const int64_t bytes = allocator_.used();
+  for (int i = 0; i < 500; ++i) {
+    ASSERT_EQ(OB_SUCCESS, add.process_word("database", 8, 8, 3));
+  }
+  EXPECT_EQ(bytes, allocator_.used());
+  EXPECT_EQ(1501, count("database"));
+  EXPECT_EQ(1507, add.get_add_word_count());
+  ASSERT_EQ(OB_SUCCESS, add.process_word("DATABASE", 8, 8, 2));
+  EXPECT_EQ(1503, count("database"));
+}
+
+TEST_F(FTSAggregationTest, lowercase_copy_without_grouping_preserves_duplicate_error)
+{
+  ObAddWordFlag flags;
+  flags.set_casedown();
+  ObAddWord add(property_, meta_, flags, allocator_, words_);
+  char input[] = "word";
+  ASSERT_EQ(OB_SUCCESS, add.process_word(input, 4, 4, 1));
+  input[0] = 'X';
+  EXPECT_EQ(1, count("word"));
+  EXPECT_EQ(OB_HASH_EXIST, add.process_word("word", 4, 4, 1));
+}
+
 TEST_F(FTSAggregationTest, weighted_repeats_preserve_existing_initial_count)
 {
   ObAddWordFlag flags;

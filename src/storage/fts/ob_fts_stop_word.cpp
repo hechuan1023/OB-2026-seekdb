@@ -189,15 +189,16 @@ int ObAddWord::process_word(
   bool is_stopword = false;
   ObFTWord src_word(word_len, word, word_meta_);
   ObFTWord dst_word;
+  bool needs_copy = false;
   if (OB_ISNULL(word) || OB_UNLIKELY(0 >= word_len || 0 >= char_cnt || 0 >= word_freq)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (is_min_max_word(char_cnt)) {
     ++min_max_word_cnt_;
-  } else if (OB_FAIL(casedown_word(src_word, dst_word))) {
+  } else if (OB_FAIL(casedown_word(src_word, dst_word, needs_copy))) {
   } else if (OB_FAIL(check_stopword(dst_word, is_stopword))) {
   } else if (OB_UNLIKELY(is_stopword)) {
     ++stopword_cnt_;
-  } else if (OB_FAIL(groupby_word(dst_word, word_freq))) {
+  } else if (OB_FAIL(groupby_word(dst_word, word_freq, needs_copy))) {
   } else {
     non_stopword_cnt_ += word_freq;
   }
@@ -209,12 +210,25 @@ bool ObAddWord::is_min_max_word(const int64_t c_len) const
   return flag_.min_max_word() && (c_len < min_token_size_ || c_len > max_token_size_);
 }
 
-int ObAddWord::casedown_word(const ObFTWord &src, ObFTWord &dst)
+int ObAddWord::casedown_word(const ObFTWord &src, ObFTWord &dst, bool &needs_copy)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(src.empty())) {
     ret = OB_INVALID_ARGUMENT;
   } else if (flag_.casedown()) {
+    const auto coll = word_meta_.get_collation_type();
+    const ObString input = src.get_word().get_string();
+    bool unchanged = coll == CS_TYPE_UTF8MB4_GENERAL_CI || coll == CS_TYPE_UTF8MB4_BIN;
+    for (int64_t i = 0; unchanged && i < input.length(); ++i) {
+      const unsigned char c = static_cast<unsigned char>(input.ptr()[i]);
+      unchanged = c < 0x80 && !(c >= 'A' && c <= 'Z');
+    }
+    if (unchanged) {
+      // Borrow only until grouping: a newly retained key must own its bytes.
+      dst = src;
+      needs_copy = true;
+      return OB_SUCCESS;
+    }
     ObString dst_str;
     if (OB_FAIL(ObCharset::tolower(
                     word_meta_.get_collation_type(),
@@ -246,9 +260,26 @@ int ObAddWord::check_stopword(const ObFTWord &ft_word, bool &is_stopword)
   return ret;
 }
 
-int ObAddWord::groupby_word(const ObFTWord &word, const int64_t word_freq)
+int ObAddWord::groupby_word(const ObFTWord &word, const int64_t word_freq, bool needs_copy)
 {
   int ret = OB_SUCCESS;
+  if (needs_copy) {
+    if (flag_.groupby_word()) {
+      auto add_frequency = [word_freq](hash::HashMapPair<ObFTWord, int64_t> &entry) {
+        entry.second += word_freq;
+      };
+      ret = word_map_.atomic_refactored(word, add_frequency);
+      if (ret != OB_HASH_NOT_EXIST) {
+        return ret;
+      }
+    }
+    ObString owned;
+    if (OB_FAIL(ob_write_string(allocator_, word.get_word().get_string(), owned))) {
+      return ret;
+    }
+    // A missing word starts at one, matching the existing weighted semantics.
+    return groupby_word(ObFTWord(owned.length(), owned.ptr(), word_meta_), word_freq, false);
+  }
   if (OB_UNLIKELY(word.empty() || word_freq <= 0)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (!flag_.groupby_word()) {
