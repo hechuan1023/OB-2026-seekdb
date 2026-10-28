@@ -224,13 +224,29 @@ int ObExprTokenize::construct_ft_parser_inner_name(const ObString &input_str, To
   storage::ObFTParser parser;
 
   char *parser_name_buf = nullptr;
+  int64_t parser_name_len = -1;
   if (OB_ISNULL(parser_name_buf
                 = static_cast<char *>(param.allocator_.alloc(storage::OB_FT_PARSER_NAME_LENGTH)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(parser.init(input_str))) {
-  } else if (OB_FAIL(parser.serialize_to_str(parser_name_buf, storage::OB_FT_PARSER_NAME_LENGTH))) {
   } else {
-    param.parser_name_ = ObString::make_string(parser_name_buf);
+    const int64_t name_len = parser.get_parser_name().len();
+    // init() validates the builtin name and selects version 1. Keep the
+    // general serializer for any other version or unexpectedly long name.
+    if (parser.get_parser_version() == 1 && parser.is_valid()
+        && name_len <= storage::OB_FT_PARSER_NAME_LENGTH - 3) {
+      MEMCPY(parser_name_buf, parser.get_parser_name().str(), name_len);
+      parser_name_buf[name_len] = '.';
+      parser_name_buf[name_len + 1] = '1';
+      parser_name_buf[name_len + 2] = '\0';
+      parser_name_len = name_len + 2;
+    } else if (OB_FAIL(parser.serialize_to_str(parser_name_buf, storage::OB_FT_PARSER_NAME_LENGTH))) {
+    }
+    if (OB_SUCC(ret)) {
+      param.parser_name_ = parser_name_len >= 0
+                               ? ObString(parser_name_len, parser_name_buf)
+                               : ObString::make_string(parser_name_buf);
+    }
   }
   return ret;
 }
