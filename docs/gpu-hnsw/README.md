@@ -195,7 +195,6 @@ hipVS 有两种把 CAGRA 图转成 HNSW 的方式，序列化出来的字节流�
 | `src/oblib/lib/vector/ob_hnsw_serial_format.{h,cpp}` | nmslib/hnswlib 序列化格式的解析、校验与 label 重写 |
 | `src/oblib/lib/vector/ob_vsag_adaptor.{h,cpp}` | 新增 `deserialize_index()`，把字节流喂给 VSAG |
 | `src/observer/vector_index/ob_plugin_vector_index_adaptor.cpp` | 两个改造点：缓冲与一次性建图 |
-| `unittest/oblib/test_hnsw_serial_format.cpp` | 格式解析/校验/重写的单元测试 |
 | `src/oblib/lib/vector/gpu/benchmark_hnsw_build.py` | 压测脚本：建表 → 灌数 → 建索引 → 算召回 |
 | `src/oblib/lib/vector/gpu/compare_benchmark_results.py` | 对比两次压测结果，输出加速比 |
 | `src/oblib/lib/vector/gpu/run_gpu_vs_cpu_benchmark.sh` | 一键跑完 CPU / GPU 两轮并出对比表 |
@@ -354,19 +353,19 @@ dim 越大、rows 越多，GPU 的优势越明显（距离计算被批量并行�
 
 ## 5. 正确性验证
 
-### 5.1 单元测试
+### 5.1 运行期格式自检
 
-`unittest/oblib/test_hnsw_serial_format.cpp` 构造了一份与 nmslib/hnswlib
-v0.7.0 布局**逐字节一致**的镜像，覆盖：
+格式的每个假设都在运行期被显式校验，任何一项不成立就放弃 GPU 结果、回退 CPU：
 
-* 头部解析（13 个字段全部核对）；
-* 缓冲区过短、空指针被拒绝；
-* M / maxM0 / 长度不匹配被拒绝；
-* label 重写正确，且元素个数不匹配时被拒绝。
+* 头部解析核对 13 个字段，缓冲区短于 96 字节直接拒绝；
+* `cur_element_count_ <= max_elements_`，且 level-0 数据块不越过缓冲区末尾；
+* `max_m_ == m_ == VSAG 的 max_degree`，`max_m0_ == 2 * max_m_`；
+* `label_offset_ + 8 <= size_data_per_element_`，重写 label 时逐元素检查边界；
+* 重写的 label 个数必须等于 `cur_element_count_`。
 
-```bash
-bazel test //unittest/oblib:test_hnsw_serial_format
-```
+校验函数是 `ob_hnsw_serial_format.cpp` 里的 `check_hnsw_serial_header()`，
+由 `ob_plugin_vector_index_adaptor.cpp` 在调用 `Deserialize` 之前调用，失败只记
+WARN 并回落到 CPU 建图，不会把不合规的字节交给 VSAG。
 
 ### 5.2 格式兼容性核对
 
