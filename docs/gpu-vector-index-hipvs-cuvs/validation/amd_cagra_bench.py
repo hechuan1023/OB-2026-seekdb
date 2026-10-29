@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """AMD CAGRA build/search benchmark for the hipVS contest task.
 
-Runs against an ALREADY STARTED seekdb observer and measures exactly what the
-official judge measures for the build score:
+Development harness for an ALREADY STARTED seekdb observer. Measures the same
+build phases as the contest, with generated inputs and mysql CLI overhead;
+it is not the official evaluator and does not predict the official score:
 
   * the offline DDL path   CREATE VECTOR INDEX ... WITH (lib=cuvs, ...)
   * the first fixed query  (part of the build window)
@@ -36,10 +37,10 @@ def mysql_cmd(port, user):
 
 
 def sql(port, user, query, timed=False):
-    t0 = time.time()
+    t0 = time.perf_counter()
     r = subprocess.run(mysql_cmd(port, user) + ["-e", query],
                        capture_output=True, text=True)
-    dt = time.time() - t0
+    dt = time.perf_counter() - t0
     if timed:
         return dt, r.returncode, r.stdout, r.stderr
     return r.returncode, r.stdout, r.stderr
@@ -63,6 +64,9 @@ def generate_rows(rows, dim, rng):
         import numpy as np
         base = np.random.default_rng(20261029).standard_normal((rows, dim)).astype("float32")
         queries = np.random.default_rng(20261030).standard_normal((256, dim)).astype("float32")
+        # Match the exact FP32 values loaded by six-decimal SQL literals.
+        base = np.round(base.astype("float64"), 6).astype("float32")
+        queries = np.round(queries.astype("float64"), 6).astype("float32")
         return base, queries
     except ImportError:
         base = [[rng.gauss(0.0, 1.0) for _ in range(dim)] for _ in range(rows)]
@@ -99,15 +103,15 @@ def load_table(port, user, db, table, dim, base, data_dir):
     os.remove(csv_path)
 
 
-def create_index(port, user, db, table, k):
-    """Offline DDL path, exactly like the judge."""
+def create_index(port, user, db, table, k, backend="cuvs"):
+    """Offline DDL path; lib=vsag provides the CPU comparison."""
+    if backend not in ("cuvs", "vsag"):
+        raise ValueError("unknown backend")
     ddl = ("use %s; create vector index idx_items on %s(v) "
-           "with (distance=l2, type=hnsw, lib=cuvs, m=16, ef_construction=200, ef_search=64);"
-           % (db, table))
+           "with (distance=l2, type=hnsw, lib=%s, m=16, ef_construction=200, ef_search=64);"
+           % (db, table, backend))
     dt, rc, out, err = sql(port, user, ddl, timed=True)
     if rc != 0:
-        # Older syntax: inline index on the table.
-        sql(port, user, "use %s; drop table if exists %s;" % (db, table))
         raise RuntimeError("create vector index failed: %s" % err)
     return dt
 
@@ -118,6 +122,9 @@ def first_query(port, user, db, table, q, k):
                            % (db, table, vec_literal(q), k), timed=True)
     if rc != 0:
         raise RuntimeError("first query failed: %s" % err)
+    ids = [int(line.split("\t")[0]) for line in out.strip().splitlines() if line]
+    if len(ids) != k or len(set(ids)) != k:
+        raise RuntimeError("first query returned an invalid result cardinality")
     return dt, out
 
 
@@ -133,6 +140,8 @@ def run_queries(port, user, db, table, queries, k):
             raise RuntimeError("query failed: %s" % err)
         lat.append(dt)
         ids = [int(ln.split("\t")[0]) for ln in out.strip().splitlines() if ln]
+        if len(ids) != k or len(set(ids)) != k:
+            raise RuntimeError("query returned an invalid result cardinality")
         got.append(ids)
     lat.sort()
     p95 = lat[min(len(lat) - 1, int(math.ceil(0.95 * len(lat))) - 1)]
@@ -143,13 +152,21 @@ def exact_knn(base, queries, k):
     """Brute-force ground truth (numpy)."""
     try:
         import numpy as np
-        b = np.asarray(base, dtype="float32")
-        q = np.asarray(queries, dtype="float32")
-        d = ((q[:, None, :] - b[None, :, :]) ** 2).sum(axis=2)
-        idx = np.argpartition(d, k, axis=1)[:, :k]
-        rows = np.arange(len(q))[:, None]
-        order = np.argsort(d[rows, idx], axis=1)
-        return idx[rows, order].tolist()
+        b = np.asarray(base, dtype="float64")
+        q = np.asarray(queries, dtype="float64")
+        if not 1 <= k <= len(b):
+            raise ValueError("k outside input range")
+        norms = np.einsum("ij,ij->i", b, b)
+        result = []
+        # Avoid a queries x rows x dimensions temporary (tens of GiB at 250K).
+        for offset in range(0, len(q), 16):
+            probes = q[offset:offset + 16]
+            d = np.einsum("ij,ij->i", probes, probes)[:, None] + norms[None, :] - 2 * (probes @ b.T)
+            idx = np.argpartition(d, k - 1, axis=1)[:, :k]
+            rows = np.arange(len(probes))[:, None]
+            order = np.argsort(d[rows, idx], axis=1)
+            result.extend(idx[rows, order].tolist())
+        return result
     except ImportError:
         return None
 
@@ -178,9 +195,12 @@ def main():
     ap.add_argument("--db", default="amdbench")
     ap.add_argument("--table", default="items")
     ap.add_argument("--label", default="run")
+    ap.add_argument("--backend", choices=("cuvs", "vsag"), default="cuvs")
     ap.add_argument("--evidence", default="/tmp/amd-ab")
     ap.add_argument("--data-dir", default="/tmp/amd-ab-data")
     args = ap.parse_args()
+    if args.rows < 100 or args.dim <= 0 or args.nq <= 0 or args.recall_samples <= 0 or not 1 <= args.k <= args.rows:
+        ap.error("require rows >= 100, positive dim/nq/recall-samples, and 1 <= k <= rows")
 
     os.makedirs(args.evidence, exist_ok=True)
     os.makedirs(args.data_dir, exist_ok=True)
@@ -197,36 +217,45 @@ def main():
     base, qpool = generate_rows(args.rows, args.dim, rng)
 
     load_table(args.port, args.user, args.db, args.table, args.dim, base, args.data_dir)
-    print("loading done, creating the GPU index (this is the scored build window) ...")
-    build_s = create_index(args.port, args.user, args.db, args.table, args.k)
+    count = sql_rows(args.port, args.user, "select count(*) from %s.%s" % (args.db, args.table))
+    if count != [[str(args.rows)]]:
+        raise RuntimeError("loaded row count does not match the requested input")
+    print("loading done, creating the %s index ..." % args.backend)
+    build_s = create_index(args.port, args.user, args.db, args.table, args.k, args.backend)
     print("build window (CREATE VECTOR INDEX): %.3f s" % build_s)
 
     first_s, _ = first_query(args.port, args.user, args.db, args.table, qpool[0], args.k)
     print("first query: %.3f s" % first_s)
 
-    sample = qpool[:args.recall_samples]
     nq = min(args.nq, len(qpool) * 16)
+    sample = qpool[:min(args.recall_samples, nq)]
     queries = [qpool[i % len(qpool)] for i in range(nq)]
     print("running %d single-row queries ..." % nq)
     lat, p95, got = run_queries(args.port, args.user, args.db, args.table, queries, args.k)
+    if any(x < 0 or x >= args.rows for result in got for x in result):
+        raise RuntimeError("query returned an out-of-range ID")
 
-    truth = exact_knn(base, sample, args.k)
-    rec10 = recall(got[:len(sample)], truth, args.k) if truth else None
-    rec100 = None
+    truth = exact_knn(base, sample, 100)
+    rec10, rec100 = None, None
     if truth is not None:
-        _, _, got100 = run_queries(args.port, args.user, args.db, args.table, sample, 100)
-        truth100 = exact_knn(base, sample, 100) or truth
-        rec100 = recall(got100, truth100, 100)
+        got10 = got[:len(sample)] if args.k == 10 else run_queries(args.port, args.user, args.db, args.table, sample, 10)[2]
+        got100 = got[:len(sample)] if args.k == 100 else run_queries(args.port, args.user, args.db, args.table, sample, 100)[2]
+        if any(x < 0 or x >= args.rows for result in got10 + got100 for x in result):
+            raise RuntimeError("recall query returned an out-of-range ID")
+        rec10 = recall(got10, truth, 10)
+        rec100 = recall(got100, truth, 100)
 
     total = sum(lat)
     record = {
         "label": args.label,
+        "backend": args.backend,
         "rows": args.rows,
         "dim": args.dim,
         "nq": nq,
         "k": args.k,
         "build_seconds": round(build_s, 3),
         "first_query_seconds": round(first_s, 3),
+        "build_and_first_query_seconds": round(build_s + first_s, 3),
         "query_qps": round(nq / total, 2) if total else 0.0,
         "query_p95_ms": round(p95 * 1000, 3),
         "query_avg_ms": round(total / max(1, nq) * 1000, 3),

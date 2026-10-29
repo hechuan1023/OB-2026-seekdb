@@ -1,9 +1,10 @@
 # AMD × hipVS 赛题：合规提测与优化作战手册
 
 > 更新：下文为历史操作指南。round2 的 75 次方案见 [AMD-CANDIDATE-75.md](AMD-CANDIDATE-75.md)。
-> `amd-cagra-opt-round4` 在 round3 的 192/192/35 配置和复用查询线程之上去除重复快照向量。
-> 最新测试及兼容边界见 [AMD-CANDIDATE-ROUND4.md](AMD-CANDIDATE-ROUND4.md)，
-> 上一阶段测试记录见 [AMD-CANDIDATE-ROUND3.md](AMD-CANDIDATE-ROUND3.md)。
+> `amd-cagra-opt-round5` 在 round4 之上将迭代降到 25 次，并扩大到 4096 条不同查询验证。
+> 最新测试与质量余量见 [AMD-CANDIDATE-ROUND5.md](AMD-CANDIDATE-ROUND5.md)。
+> 快照兼容边界见 [AMD-CANDIDATE-ROUND4.md](AMD-CANDIDATE-ROUND4.md)，
+> round3 的测试记录见 [AMD-CANDIDATE-ROUND3.md](AMD-CANDIDATE-ROUND3.md)。
 > 不要将下文早期保底得分或逐位一致的描述视为验证结论。
 
 > 适用赛题：使用 hipVS 加速 HNSW 索引构建（AMD 赛题，总分 20 分 = 硬门槛 4 + 构建性能 14 + 批量查询 2）
