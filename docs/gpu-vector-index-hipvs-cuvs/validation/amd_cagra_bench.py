@@ -32,7 +32,7 @@ MYSQL_BIN = os.environ.get("MYSQL_BIN", "mysql")
 
 
 def mysql_cmd(port, user):
-    return [MYSQL_BIN, "-h127.0.0.1", "-P%d" % port, "-u%s" % user, "--local-infile=1"]
+    return [MYSQL_BIN, "-h127.0.0.1", "-P%d" % port, "-u%s" % user, "--local-infile=1", "-N"]
 
 
 def sql(port, user, query, timed=False):
