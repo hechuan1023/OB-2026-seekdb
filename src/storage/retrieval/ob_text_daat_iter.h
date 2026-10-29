@@ -67,6 +67,7 @@ public:
   int init(const ObTextDaaTParam &param);
   virtual void reuse(const bool switch_tablet = false) override;
   virtual void reset() override;
+  virtual int get_next_rows(const int64_t capacity, int64_t &count) override;
 protected:
   virtual int pre_process() override;
   virtual int do_one_merge_round(int64_t &count) override;

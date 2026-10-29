@@ -202,6 +202,51 @@ int ObTextDaaTIter::do_one_merge_round(int64_t &count)
   return ret;
 }
 
+int ObTextDaaTIter::get_next_rows(const int64_t capacity, int64_t &count)
+{
+  // The qualifying small-dimension unscored natural-language merge spends one
+  // output row per round, so the batch loop runs here and each round takes a
+  // qualified (non-virtual) call to this class's merge round. Every other mode
+  // keeps the base implementation with its virtual rounds; the two loops stay
+  // step-for-step identical apart from that dispatch.
+  if (nullptr == iter_param_ || nullptr != iter_param_->relevance_expr_
+      || nullptr == dim_iters_ || dim_iters_->count() > 4
+      || mode_flag_ != sql::ObMatchAgainstMode::NATURAL_LANGUAGE_MODE
+      || function_lookup_mode_) {
+    return ObSRDaaTIterImpl::get_next_rows(capacity, count);
+  }
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(0 == capacity)) {
+    count = 0;
+  } else if (0 == dim_iters_->count()) {
+    ret = OB_ITER_END;
+  } else if (iter_param_->limit_param_->is_valid() && output_row_cnt_ >= iter_param_->limit_param_->limit_) {
+    ret = OB_ITER_END;
+  } else if (OB_FAIL(ObTextDaaTIter::pre_process())) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+    } else {
+      count = 0;
+    }
+  } else {
+    count = 0;
+    const int64_t real_capacity = MIN(capacity, iter_param_->max_batch_size_);
+    while (OB_SUCC(ret) && count < real_capacity) {
+      if (OB_FAIL(ObTextDaaTIter::do_one_merge_round(count))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) || OB_ITER_END == ret) {
+      if (count > 0 && OB_FAIL(project_results(count))) {
+      }
+    }
+  }
+  return ret;
+}
+
 ObTextBMWIter::ObTextBMWIter()
   : ObSRBMWIterImpl(),
     bm25_param_estimator_() {}
