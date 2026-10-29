@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_text_daat_iter.h"
+#include "ob_text_retrieval_token_iter.h"
 
 namespace oceanbase
 {
@@ -35,6 +36,10 @@ int ObTextDaaTIter::init(const ObTextDaaTParam &param)
   } else {
     mode_flag_ = param.mode_flag_;
     function_lookup_mode_ = param.function_lookup_mode_;
+    membership_collector_ = nullptr != param.membership_collector_
+        && param.membership_collector_ == param.relevance_collector_
+        ? param.membership_collector_ : nullptr;
+    native_dim_iters_ = param.native_dim_iters_;
   }
   return ret;
 }
@@ -49,6 +54,8 @@ void ObTextDaaTIter::reset()
     }
   }
   ObSRDaaTIterImpl::reset();
+  membership_collector_ = nullptr;
+  native_dim_iters_ = false;
 }
 
 void ObTextDaaTIter::reuse(const bool switch_tablet)
@@ -101,6 +108,16 @@ int ObTextDaaTIter::do_one_merge_round(int64_t &count)
     ObISRDaaTDimIter *iter = iters[idx];
     if (OB_ISNULL(iter)) {
       ret = OB_ERR_UNEXPECTED;
+    } else if (native_dim_iters_) {
+      // Native token iterators advance their posting cursor in one non-virtual
+      // step; end-of-list and error semantics match the virtual pair below.
+      ret = static_cast<ObTextRetrievalDaaTTokenIter *>(iter)->advance_cached(ids[idx]);
+      if (OB_ITER_END == ret) {
+        ids[idx] = nullptr;
+        ret = OB_SUCCESS;
+      } else if (OB_SUCC(ret) && OB_ISNULL(ids[idx])) {
+        ret = OB_ERR_UNEXPECTED;
+      }
     } else if (OB_FAIL(iter->get_next_row())) {
       if (OB_ITER_END == ret) {
         ids[idx] = nullptr;
@@ -136,6 +153,24 @@ int ObTextDaaTIter::do_one_merge_round(int64_t &count)
     if (minimum.iter_idx_ < 0) {
       ret = OB_ITER_END;
     } else {
+      if (nullptr != membership_collector_) {
+        for (int64_t i = 0; i < dim_count; ++i) {
+          if ((matches & (uint64_t(1) << i)) != 0) {
+            next_iters[next_round_cnt_++] = i;
+          }
+        }
+        double relevance = 0.0;
+        bool need_project = false;
+        const ObDatum &id = *ids[minimum.iter_idx_];
+        if (OB_FAIL(membership_collector_->evaluate_membership(
+            dim_count, matches, iter_param_->dim_weights_, iter_param_->field_boost_,
+            relevance, need_project))) {
+        } else if (need_project && OB_FAIL(process_collected_row(id, relevance))) {
+        } else if (need_project && OB_FAIL(filter_on_demand(count, relevance, need_project))) {
+        } else if (need_project && OB_FAIL(cache_result(count, id, relevance))) {
+        }
+        return ret;
+      }
       // Consume all equal heads together. Other heads remain valid until the
       // next round that advances their iterator, including across output batches.
       for (int64_t i = 0; OB_SUCC(ret) && i < dim_count; ++i) {

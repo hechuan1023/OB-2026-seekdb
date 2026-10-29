@@ -422,6 +422,9 @@ int ObDASLegacyTRMergeIter::create_sparse_retrieval_iter()
   } else if (daat_mode_) {
     ObTextDaaTParam iter_param;
     ObTextDaaTIter *daat_iter = nullptr;
+    // create_dim_iters() builds ObTextRetrievalDaaTTokenIter for every
+    // dimension in this mode, so the merge may use its fused advance.
+    iter_param.native_dim_iters_ = true;
     if (OB_FAIL(init_daat_iter_param(iter_param))) {
     } else if (OB_ISNULL(daat_iter = OB_NEWx(ObTextDaaTIter, &myself_allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -498,6 +501,7 @@ int ObDASLegacyTRMergeIter::init_daat_iter_param(ObTextDaaTParam &iter_param)
   }
   if (OB_SUCC(ret)) {
     if (BOOLEAN_MODE == ir_ctdef_->mode_flag_) {
+      iter_param.membership_collector_ = nullptr;
       ObSRDaaTBooleanRelevanceCollector *boolean_relevance_collector = nullptr;
       if (OB_ISNULL(boolean_relevance_collector = OB_NEWx(ObSRDaaTBooleanRelevanceCollector, &myself_allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -513,6 +517,7 @@ int ObDASLegacyTRMergeIter::init_daat_iter_param(ObTextDaaTParam &iter_param)
       } else if (OB_FAIL(inner_product_relevance_collector->init(should_match))) {
       } else {
         iter_param.relevance_collector_ = inner_product_relevance_collector;
+        iter_param.membership_collector_ = inner_product_relevance_collector;
       }
     }
   }
