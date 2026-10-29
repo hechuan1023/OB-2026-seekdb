@@ -3,13 +3,15 @@
 Creates and drops only fts_projection_pruning_regression. Every query is compared
 with the same query using NO_PROJECT_PRUNE on the derived table. --require-pruning
 also verifies that unused-column plans avoid lookup while preserving score order.
+--require-count-membership permits the cardinality-only COUNT/LIMIT view to avoid
+scoring; value-observing and explicitly ordered queries keep their original path.
 """
 import argparse
 import json
 import subprocess
 
 
-def verify(client, port, require_pruning=False):
+def verify(client, port, require_pruning=False, require_count_membership=False):
     db = "fts_projection_pruning_regression"
 
     def sql(text):
@@ -136,8 +138,11 @@ def verify(client, port, require_pruning=False):
         if require_pruning:
             plan = "\n".join(sql("EXPLAIN EXTENDED " + count_query))
             assert "is_index_back=false" in plan, plan
-            assert "calc_relevance=true" in plan and "sort_keys([MATCH(" in plan, plan
-            assert "DESC]" in plan or ", DESC])" in plan, plan
+            if require_count_membership:
+                assert "calc_relevance=false" in plan and "sort_keys(" not in plan, plan
+            else:
+                assert "calc_relevance=true" in plan and "sort_keys([MATCH(" in plan, plan
+                assert "DESC]" in plan or ", DESC])" in plan, plan
             assert "limit(20" in plan, plan
             assert "PROJECT_PRUNE(" in plan, plan
             plans_checked += 1
@@ -189,5 +194,8 @@ if __name__ == "__main__":
     parser.add_argument("--client", required=True)
     parser.add_argument("--port", required=True, type=int)
     parser.add_argument("--require-pruning", action="store_true")
+    parser.add_argument("--require-count-membership", action="store_true")
     args = parser.parse_args()
-    print(json.dumps(verify(args.client, args.port, args.require_pruning), sort_keys=True))
+    print(json.dumps(verify(args.client, args.port,
+                           args.require_pruning or args.require_count_membership,
+                           args.require_count_membership), sort_keys=True))

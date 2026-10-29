@@ -12061,10 +12061,11 @@ int ObLogPlan::prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &scan_mat
     tr_info.match_expr_ = match_against;
     tr_info.pushdown_match_filter_ = match_pred;
     // A natural-language predicate needs membership, not BM25 scores. Keep
-    // scored execution for LIMIT/top-k, boolean/weighted search, and every
+    // scored execution for ordered LIMIT/top-k, boolean/weighted search, and every
     // expression that observes the numeric score (including ORDER/HAVING).
     if (get_stmt()->is_select_stmt() && get_stmt()->is_single_table_stmt()
-        && !get_stmt()->has_limit() && !get_stmt()->has_subquery()
+        && (!get_stmt()->has_limit() || get_stmt()->get_order_item_size() == 0)
+        && !get_stmt()->has_subquery()
         && !table_scan->is_vec_adaptive_scan()
         && !table_scan->is_vec_idx_scan_post_filter()
         && match_against->get_mode_flag() == NATURAL_LANGUAGE_MODE
