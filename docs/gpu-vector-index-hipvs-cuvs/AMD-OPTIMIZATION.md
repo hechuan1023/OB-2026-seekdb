@@ -1,8 +1,9 @@
 # AMD × hipVS 赛题：合规提测与优化作战手册
 
 > 更新：下文为历史操作指南。round2 的 75 次方案见 [AMD-CANDIDATE-75.md](AMD-CANDIDATE-75.md)。
-> `amd-cagra-opt-round5` 在 round4 之上将迭代降到 25 次，并扩大到 4096 条不同查询验证。
-> 最新测试与质量余量见 [AMD-CANDIDATE-ROUND5.md](AMD-CANDIDATE-ROUND5.md)。
+> `amd-cagra-opt-round6` 使用 128/128/15 建图与固定库 MULTI_CTA 搜索，已验证两组 4096 条不同查询。
+> 最新测试、内存和 profiler 未验证项见 [AMD-CANDIDATE-ROUND6.md](AMD-CANDIDATE-ROUND6.md)。
+> round5 的验证记录见 [AMD-CANDIDATE-ROUND5.md](AMD-CANDIDATE-ROUND5.md)。
 > 快照兼容边界见 [AMD-CANDIDATE-ROUND4.md](AMD-CANDIDATE-ROUND4.md)，
 > round3 的测试记录见 [AMD-CANDIDATE-ROUND3.md](AMD-CANDIDATE-ROUND3.md)。
 > 不要将下文早期保底得分或逐位一致的描述视为验证结论。
