@@ -59,6 +59,16 @@ def main():
                 timer.cancel()
                 timer.join()
         if expected_success and result.returncode:
+            (output/'failed-sql.txt').write_text(text)
+            (output/'failed-sql-output.txt').write_text(result.stdout+result.stderr)
+            try:
+                debug = subprocess.run(command+['--connect-timeout=3','-e',
+                    'SHOW FULL PROCESSLIST; SELECT * FROM oceanbase.__all_virtual_obj_lock; '
+                    'SELECT * FROM oceanbase.__all_virtual_trans_stat;'],
+                    text=True, capture_output=True, timeout=5)
+                (output/'failed-sql-state.txt').write_text(debug.stdout+debug.stderr)
+            except subprocess.TimeoutExpired:
+                (output/'failed-sql-state.txt').write_text('diagnostic connection timed out')
             raise RuntimeError(result.stderr)
         return result
 
