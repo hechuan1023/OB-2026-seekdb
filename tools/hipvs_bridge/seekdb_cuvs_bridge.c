@@ -45,7 +45,7 @@ typedef struct {
  * ------------------------------------------------------------------------- */
 
 typedef struct {
-  int   build_algo;                 /* NN_DESCENT / ITERATIVE_SEARCH */
+  int   build_algo;                 /* NN_DESCENT / ITERATIVE_CAGRA_SEARCH */
   long  graph_degree;
   long  intermediate_graph_degree;
   long  nn_descent_niter;
@@ -90,7 +90,7 @@ static void sk_resolve_params(sk_cuvs_params* p)
 
   const char* algo = getenv("OB_CUVS_BUILD_ALGO");
   if (algo != NULL && algo[0] != '\0') {
-    if (strcmp(algo, "iterative_search") == 0) { p->build_algo = ITERATIVE_SEARCH; }
+    if (strcmp(algo, "iterative_search") == 0) { p->build_algo = ITERATIVE_CAGRA_SEARCH; }
     else if (strcmp(algo, "nn_descent") == 0) { p->build_algo = NN_DESCENT; }
   }
 
@@ -130,7 +130,6 @@ void* seekdb_cuvs_build(const float* base, long n, long dim)
   h->ip->graph_degree = (int)p.graph_degree;
   h->ip->intermediate_graph_degree = (int)p.intermediate_graph_degree;
   h->ip->nn_descent_niter = (int)p.nn_descent_niter;
-  if (p.itopk_size > 0) { h->ip->itopk_size = (int)p.itopk_size; }
   if (cuvsCagraIndexCreate(&h->idx) != CUVS_SUCCESS) goto fail_ip;
   {
     const double t0 = sk_now_sec();
@@ -176,6 +175,7 @@ int seekdb_cuvs_search(void* handle, const float* query, long nq, long topk,
       size_t required_itopk = (size_t)topk * 4;
       if (required_itopk < 512) required_itopk = 512;
       if (sp->itopk_size < required_itopk) sp->itopk_size = required_itopk;
+      if (p.itopk_size > 0) { sp->itopk_size = (size_t)p.itopk_size; }
       sp->search_width = (int)p.search_width;
     }
     cuvsFilter f; f.type=NO_FILTER; f.addr=(uintptr_t)0;

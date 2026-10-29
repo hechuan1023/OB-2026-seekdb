@@ -81,19 +81,21 @@ def load_table(port, user, db, table, dim, base, data_dir):
             f.write("%d\t%s\n" % (i, vec_literal(row)))
 
     rc, out, err = sql(port, user,
-                       "use %s; load data local infile '%s' into table %s "
+                       "use %s; set ob_query_timeout=600000000; set ob_trx_timeout=600000000; load data local infile '%s' into table %s "
                        "fields terminated by '\\t' (id, v);" % (db, csv_path.replace("\\", "/"), table))
     if rc != 0:
+        print("LOAD DATA LOCAL failed, fallback to INSERT: %s" % err.strip()[:200])
         # Fall back to batched INSERT when LOAD DATA LOCAL INFILE is unavailable.
-        sql(port, user, "use %s; set ob_sql_work_area_percentage=100;" % db)
+        sql(port, user, "use %s; set ob_sql_work_area_percentage=100; delete from %s;" % (db, table))
         step = 500
         for start in range(0, len(base), step):
             chunk = base[start:start + step]
             values = ",".join("(%d,%s)" % (start + j, vec_literal(r))
                               for j, r in enumerate(chunk))
-            rc, out, err = sql(port, user, "use %s; insert into %s values %s;" % (db, table, values))
-            if rc != 0:
-                raise RuntimeError("insert failed at row %d: %s" % (start, err))
+            stmt = "use %s; set ob_query_timeout=600000000; insert into %s values %s;" % (db, table, values)
+            r = subprocess.run(mysql_cmd(port, user), input=stmt, capture_output=True, text=True)
+            if r.returncode != 0:
+                raise RuntimeError("insert failed at row %d: %s" % (start, r.stderr))
     os.remove(csv_path)
 
 
@@ -130,7 +132,7 @@ def run_queries(port, user, db, table, queries, k):
         if rc != 0:
             raise RuntimeError("query failed: %s" % err)
         lat.append(dt)
-        ids = [ln.split("\t")[0] for ln in out.strip().splitlines() if ln]
+        ids = [int(ln.split("\t")[0]) for ln in out.strip().splitlines() if ln]
         got.append(ids)
     lat.sort()
     p95 = lat[min(len(lat) - 1, int(math.ceil(0.95 * len(lat))) - 1)]
@@ -213,7 +215,8 @@ def main():
     rec100 = None
     if truth is not None:
         _, _, got100 = run_queries(args.port, args.user, args.db, args.table, sample, 100)
-        rec100 = recall(got100, truth, 100)
+        truth100 = exact_knn(base, sample, 100) or truth
+        rec100 = recall(got100, truth100, 100)
 
     total = sum(lat)
     record = {
