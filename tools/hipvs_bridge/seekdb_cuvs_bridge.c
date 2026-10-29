@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdint.h>
 
 typedef struct {
   cuvsResources_t        res;
@@ -252,6 +253,39 @@ fail:
   fprintf(stderr, "[seekdb_cuvs] deserialize failed: %s\n", cuvsGetLastErrorText());
   free(index);
   return NULL;
+}
+
+int seekdb_cuvs_copy_dataset(void* handle, float* output, long n, long dim)
+{
+  sk_cuvs_index* index = (sk_cuvs_index*)handle;
+  if (!index || !output || n <= 0 || dim <= 0 || n != index->n || dim != index->dim ||
+      (size_t)n > SIZE_MAX / sizeof(float) / (size_t)dim) return 1;
+  DLManagedTensor dataset = {0};
+  if (cuvsCagraIndexGetDataset(index->idx, &dataset) != CUVS_SUCCESS) return 1;
+  const DLTensor* tensor = &dataset.dl_tensor;
+  int rc = 1;
+  if (tensor->data && tensor->ndim == 2 && tensor->shape &&
+      tensor->shape[0] == n && tensor->shape[1] == dim &&
+      tensor->dtype.code == kDLFloat && tensor->dtype.bits == 32 && tensor->dtype.lanes == 1 &&
+      tensor->device.device_type == kDLCUDA &&
+      (!tensor->strides || (tensor->strides[1] == 1 && tensor->strides[0] >= dim))) {
+    const size_t width = sizeof(float) * (size_t)dim;
+    const uint64_t stride = tensor->strides ? (uint64_t)tensor->strides[0] : (uint64_t)dim;
+    if (stride <= SIZE_MAX / sizeof(float) &&
+        (size_t)n <= SIZE_MAX / (sizeof(float) * (size_t)stride)) {
+      const char* source = (const char*)tensor->data + tensor->byte_offset;
+      const size_t pitch = sizeof(float) * (size_t)stride;
+#ifdef __HIP_PLATFORM_AMD__
+      rc = hipMemcpy2D(output, width, source, pitch, width, (size_t)n, hipMemcpyDeviceToHost)
+           == hipSuccess ? 0 : 1;
+#else
+      rc = cudaMemcpy2D(output, width, source, pitch, width, (size_t)n, cudaMemcpyDeviceToHost)
+           == cudaSuccess ? 0 : 1;
+#endif
+    }
+  }
+  if (dataset.deleter) dataset.deleter(&dataset);
+  return rc;
 }
 
 int seekdb_cuvs_cagra_knn(const float* base, long n, long dim,
