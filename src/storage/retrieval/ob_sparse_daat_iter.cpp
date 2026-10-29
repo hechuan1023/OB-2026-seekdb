@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_sparse_daat_iter.h"
+#include "fts_binary_docid_compare.h"
 
 namespace oceanbase
 {
@@ -44,6 +45,12 @@ int ObSRMergeCmp::init(
     if (OB_ISNULL(cmp_func_)) {
       ret = OB_ERR_UNEXPECTED;
     } else {
+      // CS_TYPE_BINARY document ids compare as unpadded bytes; route the hot
+      // merge comparator through the specialized path and keep every other
+      // type and collation on its registered comparator.
+      if (id_meta.type_ == ObVarcharType && id_meta.cs_type_ == CS_TYPE_BINARY) {
+        cmp_func_ = compare_binary_document_ids;
+      }
       is_inited_ = true;
     }
   }
