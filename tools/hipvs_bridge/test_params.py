@@ -30,17 +30,17 @@ def main():
           'p.search_width); return 0; }\n'
     )
     cases = [
-        ({}, (1, 128, 128, 15, 1024, 4)),
+        ({}, (1, 64, 64, 8, 4096, 4)),
         ({"OB_CUVS_PROFILE": "baseline"}, (1, 128, 256, 100, 0, 4)),
         ({"OB_CUVS_PROFILE": "fast"}, (1, 64, 128, 30, 0, 4)),
         ({"OB_CUVS_PROFILE": "aggressive"}, (1, 64, 128, 20, 0, 4)),
         ({"OB_CUVS_PROFILE": "baseline", "OB_CUVS_NN_DESCENT_NITER": "75"},
          (1, 128, 256, 75, 0, 4)),
-        ({"OB_CUVS_NN_DESCENT_NITER": "100"}, (1, 128, 128, 100, 1024, 4)),
-        ({"OB_CUVS_NN_DESCENT_NITER": "invalid"}, (1, 128, 128, 15, 1024, 4)),
-        ({"OB_CUVS_NN_DESCENT_NITER": "0"}, (1, 128, 128, 1, 1024, 4)),
-        ({"OB_CUVS_BUILD_ALGO": "iterative_search"}, (2, 128, 128, 15, 1024, 4)),
-        ({"OB_CUVS_ITOPK_SIZE": "512"}, (1, 128, 128, 15, 512, 4)),
+        ({"OB_CUVS_NN_DESCENT_NITER": "100"}, (1, 64, 64, 100, 4096, 4)),
+        ({"OB_CUVS_NN_DESCENT_NITER": "invalid"}, (1, 64, 64, 8, 4096, 4)),
+        ({"OB_CUVS_NN_DESCENT_NITER": "0"}, (1, 64, 64, 1, 4096, 4)),
+        ({"OB_CUVS_BUILD_ALGO": "iterative_search"}, (2, 64, 64, 8, 4096, 4)),
+        ({"OB_CUVS_ITOPK_SIZE": "512"}, (1, 64, 64, 8, 512, 4)),
         ({"OB_CUVS_PROFILE": "baseline", "OB_CUVS_ITOPK_SIZE": "1024"},
          (1, 128, 256, 100, 1024, 4)),
     ]
