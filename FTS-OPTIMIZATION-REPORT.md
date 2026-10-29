@@ -2138,3 +2138,67 @@ IK 全列与正文两个阶段，快照各显示两个角色分别 20,096 次成
 基于相同 20,000 行数据的同实例诊断，默认查询和 `NO_PROJECT_PRUNE` 对照查询的 COUNT 均为 20，分别验证不回表和回表，保持相关性排序及 LIMIT；四对中位耗时分别约 2.421 和 2.607 ms（约 7.1%）。另用返回 id 的诊断查询核对身份和顺序，但该查询本身可能回表，不能证明 COUNT 内部隐含行完全相同；同分排序无显式稳定键。诊断不能代替正式基准，结果见 `_build/fts-docker-build-20261028/projection-same-instance-diagnostic/run-joint-01`。
 
 联合版相对仅分词控制版，完整基准首组和反向组的 LIMIT 中位耗时改善约 9.67% 和 16.32%；合并八对由 2.8613 降至 2.52105 ms，约改善 11.89%。合并中位数中 IK 分词约退化 2.52%、SELECT 1 控制约退化 2.32%，其他指标有波动；本地数值和官方环境不可直接比较，不能推算正式得分。原始 16 次报告与评分脚本校验结果见 `_build/fts-docker-build-20261028/projection-joint-e2e`。
+
+## 2026-10-28：全文迭代器跳转跨度诊断
+
+在新分支 a7564d968 的独立插桩副本统计 `ObTextRetrievalDaaTTokenIter::advance_to` 内批次逐项前进次数，使用专用实例和此前生成的 20,000 行测试数据库，将原 LIMIT 查询执行 200 次，所有结果均为 20。插桩仅在私有副本，未修改产品源码或计分脚本；首次查看进程输出没有快照，是因为 seekdb 将 stderr 重定向至实例日志。
+
+第二次运行的最后累计快照为 1,292,400 次调用：前进 0 次 460,200，1 次 313,200，2 次 253,800，3–4 次 240,200，5–8 次 600，9–16 次 21,600，17–32 次 2,800，更多次数为 0。超过 8 次约占 1.89%。快照含实例启动以来其他可能活动且非原子读取，尾部不足周期未计入；插桩输出开销大，计数不表示耗时或正式成绩。具体脚本和快照位于 `_build/fts-docker-build-20261028/next-seek-diagnostic`，工具脚本位于 `_build/fts_next_seek_diagnostic.py` 和 `_build/fts_next_run_seek_diagnostic.py`。
+
+该输入下大多数调用跳转很短，暂不采用额外二分或指数查找；被 skip 标记位置的文档 ID 存储行为也需要进一步确认，不能仅假设整个缓冲区都可比较。此诊断没有形成性能改动。
+
+## 2026-10-29：重新采样与临时行读取候选
+
+重新使用二进制 SHA256 5f15102f68253e379723195fe47e87baf0813d715d0e9cc0569db371a00b8e0b（dad21）在独立 WSL 实例2896准备原20,000行数据并逐个重建三种全文索引，采集进程级cpu-clock调用栈。报告在 `_build/fts-next-profile-20261029`。原脚本Windows换行导致首次准备失败，随后仅将私有副本换行转换为LF后完成；产品基准文件未改。采样耗时不用于评分。
+
+临时行读取 get_stored_row 的列长度访问存在重复；当前候选将每列长度保存到局部值，不修改编码或复制长度。独立Docker构建完成，控制ELF与dad21逐字同哈希，候选仅替换SQL basic unity对象，ELF SHA256 efe3d966daa3676df9092ffab185620925128d62a5723649b2ee1065ebd1ddb1。尚未正确性或性能验收，未提交推送。构建记录在 `_build/fts-docker-build-20261028/next-reader-build`。
+
+候选验收：39组普通SQL/排序快照及9组FTS/TOKENIZE快照与dad21控制一致。两组各四对完整原参数基准的构建类改善分别约+0.28%/+1.61%，三类等权综合变化约-0.66%/+1.19%，未能证明稳定净收益。已在核对源码归档哈希一致后撤回产品改动；没有提交推送。完整报告、快照和候选源码保存在 `_build/fts-docker-build-20261028/next-reader-build`，这些本地变化不是正式评分。
+
+## 2026-10-29：分桶跳过原位交换候选
+
+最新dad21采样显示逐位分桶仍占构建CPU约3%–4%。候选只在分桶源与目标位置相同时省去AQSItem原位交换，保持divide_line递增和递归语义。控制ELF哈希与dad21一致，候选ELF为cf0b0f9386941be061394dd8cb6d4bfcebfca7f58fc21cff6fa46e718a8d70ca。39组普通SQL/排序与9组全文快照对照通过。完整基准已启动，尚未完成；没有性能结论、提交或推送。实验记录位于 `_build/fts-docker-build-20261028/next-selfswap-build`，私有产物为容器combined/next-selfswap-private。
+
+分桶候选完整对照：两组各四对，构建类改善首组约-2.27%、反向组+2.33%；三类等权约-2.86%/+1.07%。结果不稳定，不作为有效优化。已核对候选源码与归档一致后撤回产品改动。39组普通SQL/排序、9组FTS结果一致，仅证明功能，不能证明提速。原始报告与源码保存在 `_build/fts-docker-build-20261028/next-selfswap-build`。后续调查DDL阶段等待：普通调度重试默认10ms，不直接解释官方构建约3秒差异，尚无证据可修改等待逻辑。
+
+## 2026-10-29：DDL状态时间线
+
+从高分版本专用实例的结构化 `ddl scheduler/switch_state` 日志按task_id提取状态转移，未改产品。脚本 `_build/fts_next_ddl_timeline.py` 输出 `_build/fts-next-profile-20261029/ddl-timeline.json`，含每任务完整转移与间隔。三种索引父任务最长区间为WAIT_AUX_TABLE_COMPLEMENT；子任务最长区间为REDEFINITION至VALIDATE_CHECKSUM。例如任务1001954该区间约5.369秒，另一辅助表任务1001950约2.848秒。这里包含计算、I/O、异步执行与轮询，不能全部视为可消除等待，更不能据此缩短事务或校验条件。普通调度间隔10ms与约3秒正式波动没有直接因果证据。下一步应在重建阶段进一步对应内部SQL执行与子任务调度，避免继续根据独立微基准判断整体收益。
+
+## 2026-10-29：辅助表任务串行与双线程实验
+
+结构化send innersql/finish事件与状态时间线对应，第二辅助表在第一任务完成后立即开始。例如1001954进入REDEFINITION到发送SQL约2.778秒，内部SQL和后续检查约2.578秒；1001950内部SQL和检查约2.775秒。完整拆分见 `_build/fts-next-profile-20261029/ddl-sql-timeline.json`。源码ObDDLLocalBuilder在mini mode仅1线程，普通模式16线程；当前隔离候选仅将mini mode实验为2线程，需验证峰值内存、并发DDL、失败和恢复，不预先认为安全或有收益。控制ELF与dad21相同，候选4d63326ef787b44eff8433dbd6527ad1fa1e978fd47ce636ab9339f6a98d87d2；39组排序/普通SQL和9组FTS快照一致，完整基准刚启动，未推送。实验产物 next-ddl-parallel-build/private。
+
+双线程候选完整性能：两组各四对原参数基准，构建类改善首组约39.47%、反向组38.13%。首组三项构建中位为6.3095→3.830、4.685→2.6315、2.586→1.6735秒；反向组6.2415→4.1785、4.7025→2.636、2.596→1.6255秒。首组峰值RSS控制约409–436MB十进制、候选约449–472MB；只代表该20k输入。分词与查询仍有波动，不能换算官方分数。原始报告和候选源码在next-ddl-parallel-build。并发DDL、低资源、失败恢复及完整回归仍待验证，未提交推送。
+
+新增并发DDL回归（unittest/storage/fts/fts_ddl_parallel_regression.py）：高分控制和候选均在默认配置通过两个全文索引+一个普通索引同时创建，重复键导致唯一索引失败后合法重试，正常重启后结果一致以及全文索引删除重建。1GiB候选完成初次并发、失败重试、重启后的snapshot，随后删除/重建全文索引步骤150秒超时；不是启动失败。1GiB高分控制正在复查，尚不能归因或作为通过。暂未提交推送。
+
+1GiB重复验证：候选第二次完整运行通过，但第三次又在重启后的DROP INDEX步骤150秒超时；后续第四次因驱动check=True未执行。失败期间独立SHOW FULL PROCESSLIST显示DROP INDEX f ON ddl_parallel_regression.a活跃约62秒，未见新建索引事件或直接内存不足证据。脚本已补超时SQL/进程列表采集（第三次运行前脚本已加载旧版，因此该次仅有手动查询证据）。不能据此声明内存是根因或问题已修复；候选仍不得提交。
+
+低内存对照复查：高分控制在独立1GiB实例新增两次均完整通过（共3次通过）；候选v4也通过，1GiB已知为2次通过、2次DROP INDEX超时。问题偶发且当前更集中候选，尚不能定论根因。源码DROP INDEX执行时先serialize_root_service_call再wait_drop_index_finish，后者轮询完成记录100ms；失败日志未出现新调度事件，下一步需要失败现场线程栈确定等待位置。所有失败保留，不声明兼容性通过。
+
+候选v5 1GiB复测通过，v6复现DROP INDEX超时，v7/v8未运行。已抓取等待现场和完整28帧线程栈，位于next-ddl-parallel-build/stress-opt-1g-v6/waiting-{threads,full-threads}.txt。ReqWorker链为ObIndexBuilder::drop_index→ObDDLSQLTransaction::start→lock_all_ddl_operation→表锁服务→ObLockMemtable::lock_重试；另TimerWK等待root_service_serial_mutex，两个DdlBuild线程均在空队列等待。定位到全局DDL操作锁获取，但尚未确定持有者、是否恢复遗留或候选引入；不得以增加超时或内存阈值代替修复。超时SQL和进程列表也已自动保存。仍未提交推送。
+
+锁持有者证据：对失败v6的专用数据库再次启动，仅查询__all_virtual_obj_lock和__all_virtual_trans_stat，结果保存stress-opt-1g-v6/lock-inspection-{objects,transactions}.txt。事务553持有RUNTIME对象1的X锁，IN_TRANS_COMMON_LOCK/DOING，session_id=0、is_decided=0、expired_time=NULL，replay_complete=1；锁创建时间在首次运行最后一个唯一索引good任务cleanup附近。持久化未决事务阻塞后续DDL有直接证据，但尚未证明事务为何未结束、是否仅候选触发或shutdown/recovery既有问题。没有人为解锁或删除记录，继续保留失败库用于排查。
+
+进一步精确提取事务553的初始日志，发现锁由TimerWK1_SystemPkgLoad线程在00:35:22.333获取，而非DDL构建线程；随后服务重启后该事务只有redo重放，仍未决。源码ObServer::stop仅在in_process_时提前deactivate launcher并stop/wait package loader；普通服务模式缺少此提前收尾。新实验将已有提前停止逻辑扩展至所有模式，需单独构建并验证关闭/恢复，不直接清除锁或任意回滚恢复事务。候选仍未提交。
+
+更正关闭方式：测试stop()调用process.terminate发送SIGTERM，新增退出码记录为-9；源码ob_signal_handle.cpp明确SIGTERM在Linux上raise(SIGKILL)，且cgroup memory.events oom/oom_kill均0。因此此前所谓正常重启实为硬杀恢复用例；异常是系统包加载事务被硬杀后，恢复未决全局DDL锁。ObServer::stop提前停止系统包无法修复SIGKILL路径，联合关闭候选三次中两通过一失败，该关闭顺序改动已归档后撤回，不作为修复。之后应分别验证SIGUSR1正常停止与SIGTERM硬杀恢复，原失败仍有效，不能删去或替换成正常停止来判通过。
+
+高分版同库恢复对照：使用dad21控制ELF启动原失败v6数据库，仅查询锁与事务虚拟表，仍见事务553/INIT(10)/未决/无超时及RUNTIME1排他锁。输出stress-opt-1g-v6/control-recovery，未人为更改锁。两版本共享该状态的恢复缺口得到证明，但不能据此证明候选对失败状态产生概率无影响。本地start_local_log_明确在重放完成后保留incomplete tx contexts，而abort()拒绝replay context；需为独占本地恢复后的未决INIT事务设计持久化回滚及完成屏障，保留已提交和已准备语义，不能用内存清锁替代。尚未实现该修复，双线程候选仍未提交。
+
+## 2026-10-29：本地恢复遗留事务回滚原型
+
+新增在本地日志重放任务排空、可写handler激活后，遍历遗留重放事务的受限回滚原型：完整INIT事务通过现有replay_to_commit转换并提交TX_ABORT_LOG，等待异步事务结束后再完成启动；已决定事务不改写，其他未决状态当前拒绝推进（兼容性仍需完善）。原失败v6数据库用候选启动后，锁/事务表均无遗留项；随后用未修改的dad21控制再次启动，同样无遗留项，提供回滚结果持久化的初步证据。输出next-recovery-build/existing-failure及control-after-repair。编译成功；全新1GiB崩溃恢复回归刚启动，用户数据、准备态和完整性能/功能尚待验证，未提交推送。
+
+恢复原型修订：准备态/不完整事务上下文保留现有决定路径，不再因此拒绝启动；仅完整INIT遗留事务提交持久化回滚。新用户事务用例已通过：5000条未提交记录的redo经MINOR FREEZE并从虚拟事务表确认已写出，SIGTERM硬杀后重启，只保留已提交记录，写入可继续，第二次硬杀重启仍一致。记录next-recovery-build/user-tx-v1，测试为unittest/storage/fts/fts_local_tx_recovery_regression.py。不能据此宣称准备态已运行覆盖；其兼容性及整个候选尚需完整验收。新三轮1GiB DDL恢复测试已启动，未提交。
+
+新恢复候选三轮独立1GiB并发DDL+失败重试+硬杀恢复+索引重建均通过（next-recovery-build/ddl-1g-v2/v3/v4）。仍需完整SQL/AI/FTS及最终联合二进制性能对照。
+
+## 2026-10-29：最终联合候选验证
+
+已将分支已有TOKENIZE/投影剪枝、双线程构建与恢复回滚联合链接，ELF SHA256 ce35ecad0d51483919ff246271ea10d92f204cdcd5250c44ed7914f990e58c41；来源和三个archive摘要在next-final-build/metadata.json。18项FTS/AI、8客户端2048条SQL、162过滤查询及135membership通过。39组普通SQL/排序与9组FTS快照相对dad21一致。原参数完整基准已启动，尚无最终性能结论。恢复准备态只静态保护，尚未运行覆盖；尚未提交推送。
+
+最终联合基准：两组各四对完整原参数报告均经未修改评分脚本校验。首组构建/分词/查询类改善约40.63%/0.81%/-2.27%，综合13.06%；反向组43.04%/10.33%/4.35%，综合19.24%。这些是相对本地dad21的变化，不能换算平台成绩。源码哈希、所有报告及中位数在next-final-build。联合ELF用户事务崩溃恢复、已提交记录及第二次重启一致性通过，1GiB三轮DDL恢复重复刚启动。未推送，正式满分仍无证据。
+
+最终联合ELF三轮独立1GiB DDL并发/失败重试/硬杀恢复/重建全部通过（next-final-build/ddl-1g-v1/v2/v3）。最终源码与metadata匹配，准备提交独立分支；正式平台分数尚无结果，目标不作完成判定。
