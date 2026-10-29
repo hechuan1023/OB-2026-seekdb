@@ -10,6 +10,8 @@
 #endif
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 typedef struct {
   cuvsResources_t        res;
@@ -17,6 +19,95 @@ typedef struct {
   cuvsCagraIndex_t       idx;
   long n, dim;
 } sk_cuvs_index;
+
+/* ---------------------------------------------------------------------------
+ * Run-time tunable CAGRA build/search parameters.
+ *
+ * The frozen V5 baseline hardcodes graph_degree=128, intermediate_graph_degree=256
+ * and nn_descent_niter=100. Those values are conservative for recall, but they sit
+ * far above the cuVS CAGRA defaults (64 / 128 / 20) and they dominate the
+ * end-to-end index build time this contest scores.
+ *
+ * The parameters are therefore resolved from the environment at run time, so one
+ * compiled artefact can be A/B tested on the AMD cloud instance without a rebuild.
+ * The defaults are deliberately identical to the frozen baseline, so an unset
+ * environment reproduces the baseline behaviour and numbers exactly.
+ *
+ *   OB_CUVS_PROFILE                   baseline (default) | fast | aggressive
+ *   OB_CUVS_BUILD_ALGO                nn_descent (default) | iterative_search
+ *   OB_CUVS_GRAPH_DEGREE              default 128
+ *   OB_CUVS_INTERMEDIATE_GRAPH_DEGREE default 256
+ *   OB_CUVS_NN_DESCENT_NITER          default 100
+ *   OB_CUVS_ITOPK_SIZE                default: keep the library default
+ *   OB_CUVS_SEARCH_WIDTH              default 4
+ *
+ * Any explicit OB_CUVS_* variable wins over the profile.
+ * ------------------------------------------------------------------------- */
+
+typedef struct {
+  int   build_algo;                 /* NN_DESCENT / ITERATIVE_SEARCH */
+  long  graph_degree;
+  long  intermediate_graph_degree;
+  long  nn_descent_niter;
+  long  itopk_size;                 /* <= 0: do not touch the library default */
+  long  search_width;
+} sk_cuvs_params;
+
+static long sk_env_long(const char* name, long dflt, long lo, long hi)
+{
+  const char* v = getenv(name);
+  if (v == NULL || v[0] == '\0') { return dflt; }
+  char* end = NULL;
+  long r = strtol(v, &end, 10);
+  if (end == v) { return dflt; }
+  if (r < lo) { r = lo; }
+  if (r > hi) { r = hi; }
+  return r;
+}
+
+static void sk_resolve_params(sk_cuvs_params* p)
+{
+  /* Frozen baseline values (identical to V5) are the safe default. */
+  p->build_algo = NN_DESCENT;
+  p->graph_degree = 128;
+  p->intermediate_graph_degree = 256;
+  p->nn_descent_niter = 100;
+  p->itopk_size = 0;
+  p->search_width = 4;
+
+  const char* profile = getenv("OB_CUVS_PROFILE");
+  if (profile != NULL && profile[0] != '\0') {
+    if (strcmp(profile, "fast") == 0) {
+      p->graph_degree = 64;
+      p->intermediate_graph_degree = 128;
+      p->nn_descent_niter = 30;
+    } else if (strcmp(profile, "aggressive") == 0) {
+      p->graph_degree = 64;
+      p->intermediate_graph_degree = 128;
+      p->nn_descent_niter = 20;
+    }
+  }
+
+  const char* algo = getenv("OB_CUVS_BUILD_ALGO");
+  if (algo != NULL && algo[0] != '\0') {
+    if (strcmp(algo, "iterative_search") == 0) { p->build_algo = ITERATIVE_SEARCH; }
+    else if (strcmp(algo, "nn_descent") == 0) { p->build_algo = NN_DESCENT; }
+  }
+
+  p->graph_degree = sk_env_long("OB_CUVS_GRAPH_DEGREE", p->graph_degree, 8, 512);
+  p->intermediate_graph_degree =
+      sk_env_long("OB_CUVS_INTERMEDIATE_GRAPH_DEGREE", p->intermediate_graph_degree, 8, 512);
+  p->nn_descent_niter = sk_env_long("OB_CUVS_NN_DESCENT_NITER", p->nn_descent_niter, 1, 1000);
+  p->itopk_size = sk_env_long("OB_CUVS_ITOPK_SIZE", p->itopk_size, 0, 4096);
+  p->search_width = sk_env_long("OB_CUVS_SEARCH_WIDTH", p->search_width, 1, 64);
+}
+
+static double sk_now_sec()
+{
+  struct timespec ts;
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) { return 0.0; }
+  return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
 
 void* seekdb_cuvs_build(const float* base, long n, long dim)
 {
@@ -31,13 +122,25 @@ void* seekdb_cuvs_build(const float* base, long n, long dim)
   dset.dl_tensor.dtype.code = kDLFloat; dset.dl_tensor.dtype.bits = 32; dset.dl_tensor.dtype.lanes = 1;
   dset.dl_tensor.shape = ds; dset.dl_tensor.strides = 0; dset.dl_tensor.byte_offset = 0;
 
+  sk_cuvs_params p;
+  sk_resolve_params(&p);
+
   if (cuvsCagraIndexParamsCreate(&h->ip) != CUVS_SUCCESS) goto fail_res;
-  h->ip->build_algo = NN_DESCENT;
-  h->ip->graph_degree = 128;
-  h->ip->intermediate_graph_degree = 256;
-  h->ip->nn_descent_niter = 100;
-  if (cuvsCagraIndexCreate(&h->idx)      != CUVS_SUCCESS) goto fail_ip;
-  if (cuvsCagraBuild(h->res, h->ip, &dset, h->idx) != CUVS_SUCCESS) goto fail_idx;
+  h->ip->build_algo = p.build_algo;
+  h->ip->graph_degree = (int)p.graph_degree;
+  h->ip->intermediate_graph_degree = (int)p.intermediate_graph_degree;
+  h->ip->nn_descent_niter = (int)p.nn_descent_niter;
+  if (p.itopk_size > 0) { h->ip->itopk_size = (int)p.itopk_size; }
+  if (cuvsCagraIndexCreate(&h->idx) != CUVS_SUCCESS) goto fail_ip;
+  {
+    const double t0 = sk_now_sec();
+    if (cuvsCagraBuild(h->res, h->ip, &dset, h->idx) != CUVS_SUCCESS) goto fail_idx;
+    fprintf(stderr,
+            "[seekdb_cuvs] build done n=%ld dim=%ld algo=%d degree=%ld inter=%ld niter=%ld "
+            "itopk=%ld elapsed=%.3fs\n",
+            n, dim, (int)p.build_algo, p.graph_degree, p.intermediate_graph_degree,
+            p.nn_descent_niter, p.itopk_size, sk_now_sec() - t0);
+  }
   h->n = n; h->dim = dim;
   return h;
 
@@ -55,6 +158,8 @@ int seekdb_cuvs_search(void* handle, const float* query, long nq, long topk,
   if (!h) return 1;
   int rc = 0;
   float* qd = 0; unsigned* nd = 0; float* dd = 0; cuvsCagraSearchParams_t sp = 0;
+  sk_cuvs_params p;
+  sk_resolve_params(&p);
   if (cuvsRMMAlloc(h->res, (void**)&qd, sizeof(float)*nq*h->dim)  != CUVS_SUCCESS) { rc=10; goto done; }
   if (cuvsRMMAlloc(h->res, (void**)&nd, sizeof(unsigned)*nq*topk) != CUVS_SUCCESS) { rc=11; goto done; }
   if (cuvsRMMAlloc(h->res, (void**)&dd, sizeof(float)*nq*topk)    != CUVS_SUCCESS) { rc=12; goto done; }
@@ -71,7 +176,7 @@ int seekdb_cuvs_search(void* handle, const float* query, long nq, long topk,
       size_t required_itopk = (size_t)topk * 4;
       if (required_itopk < 512) required_itopk = 512;
       if (sp->itopk_size < required_itopk) sp->itopk_size = required_itopk;
-      sp->search_width = 4;
+      sp->search_width = (int)p.search_width;
     }
     cuvsFilter f; f.type=NO_FILTER; f.addr=(uintptr_t)0;
     if (cuvsCagraSearch(h->res, sp, h->idx, &qt, &nt, &dt, f) != CUVS_SUCCESS) { rc=15; goto done; }
