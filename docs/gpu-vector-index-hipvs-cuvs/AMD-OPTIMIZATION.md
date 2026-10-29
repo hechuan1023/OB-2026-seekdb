@@ -1,8 +1,9 @@
 # AMD × hipVS 赛题：合规提测与优化作战手册
 
-> 更新：下文保留最初的 100 次迭代开发说明。`amd-cagra-opt-round2` 的当前候选默认已改为 75 次，
-> 显式 `OB_CUVS_PROFILE=baseline` 才恢复 100 次。当前实现、测试结果及未验证风险以
-> [AMD-CANDIDATE-75.md](AMD-CANDIDATE-75.md) 为准。不要将下文早期保底得分或逐位一致的描述视为验证结论。
+> 更新：下文为历史操作指南。round2 的 75 次方案见 [AMD-CANDIDATE-75.md](AMD-CANDIDATE-75.md)。
+> `amd-cagra-opt-round3` 当前使用 192/192/35 的建图配置和复用查询线程，
+> 测试结果及未验证风险以 [AMD-CANDIDATE-ROUND3.md](AMD-CANDIDATE-ROUND3.md) 为准。
+> 不要将下文早期保底得分或逐位一致的描述视为验证结论。
 
 > 适用赛题：使用 hipVS 加速 HNSW 索引构建（AMD 赛题，总分 20 分 = 硬门槛 4 + 构建性能 14 + 批量查询 2）
 > 分支：`amd-cagra-submit`（父提交 = V5 冻结 commit，满足评测的「冻结基线后代」校验）

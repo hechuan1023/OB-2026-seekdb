@@ -20,6 +20,8 @@
 #include <map>
 #include <set>
 #include <mutex>
+#include <condition_variable>
+#include <exception>
 #include <vector>
 #include <memory>
 #include <limits>
@@ -193,6 +195,84 @@ static void ob_cuvs_erase(void *key) {
     delete it->second; g_ob_cuvs_reg.erase(it);
   }
 }
+
+// Synchronous reusable large-stack worker. Caller retains index ownership/locks.
+class CuvsSearchWorker {
+public:
+  CuvsSearchWorker() {
+    pthread_attr_t attributes;
+    if (pthread_attr_init(&attributes) == 0) {
+      if (pthread_attr_setstacksize(&attributes, 32UL * 1024 * 1024) == 0) {
+        ready_ = pthread_create(&thread_, &attributes, &CuvsSearchWorker::entry, this) == 0;
+      }
+      pthread_attr_destroy(&attributes);
+    }
+  }
+  ~CuvsSearchWorker() {
+    if (ready_) {
+      std::lock_guard<std::mutex> request(request_mutex_);
+      {
+        std::lock_guard<std::mutex> state(state_mutex_);
+        stopping_ = true;
+      }
+      available_.notify_one();
+      pthread_join(thread_, nullptr);
+    }
+  }
+  CuvsSearchWorker(const CuvsSearchWorker&) = delete;
+  CuvsSearchWorker& operator=(const CuvsSearchWorker&) = delete;
+  bool run(void* (*function)(void*), void* argument) {
+    if (!ready_) return false;
+    std::lock_guard<std::mutex> request(request_mutex_);
+    std::unique_lock<std::mutex> state(state_mutex_);
+    function_ = function;
+    argument_ = argument;
+    failure_ = nullptr;
+    done_ = false;
+    pending_ = true;
+    available_.notify_one();
+    finished_.wait(state, [this] { return done_; });
+    auto failure = failure_;
+    state.unlock();
+    if (failure) std::rethrow_exception(failure);
+    return true;
+  }
+private:
+  static void* entry(void* opaque) {
+    static_cast<CuvsSearchWorker*>(opaque)->loop();
+    return nullptr;
+  }
+  void loop() {
+    std::unique_lock<std::mutex> state(state_mutex_);
+    while (true) {
+      available_.wait(state, [this] { return pending_ || stopping_; });
+      if (stopping_) return;
+      auto function = function_;
+      auto argument = argument_;
+      pending_ = false;
+      state.unlock();
+      std::exception_ptr failure;
+      try { function(argument); } catch (...) { failure = std::current_exception(); }
+      state.lock();
+      failure_ = failure;
+      done_ = true;
+      finished_.notify_one();
+    }
+  }
+  pthread_t thread_{};
+  std::mutex request_mutex_, state_mutex_;
+  std::condition_variable available_, finished_;
+  void* (*function_)(void*) = nullptr;
+  void* argument_ = nullptr;
+  std::exception_ptr failure_;
+  bool ready_ = false, pending_ = false, done_ = false, stopping_ = false;
+};
+
+static CuvsSearchWorker& ob_cuvs_search_worker() {
+  static CuvsSearchWorker worker;
+  return worker;
+}
+
 struct ObCuvsJob {
   ObCuvsEntry *ent; const float *query; int64_t topk; int dim; size_t n;
   bool need_build; std::vector<unsigned> *off; std::vector<float> *dst;
@@ -283,10 +363,13 @@ static bool ob_cuvs_try_search(void *key, vsag::Allocator *alloc,
   std::vector<unsigned> off(topk);
   std::vector<float> dst(topk);
   ObCuvsJob job{ent, query, topk, static_cast<int>(ent->dim_), n, need_build, &off, &dst, -1, false};
-  pthread_t tid; pthread_attr_t attr; pthread_attr_init(&attr);
-  pthread_attr_setstacksize(&attr, 32UL * 1024 * 1024);
-  if (pthread_create(&tid, &attr, ob_cuvs_job, &job) == 0) { pthread_join(tid, nullptr); }
-  pthread_attr_destroy(&attr);
+  // Keep the original construction path and fallback if worker creation fails.
+  if (need_build || !ob_cuvs_search_worker().run(ob_cuvs_job, &job)) {
+    pthread_t tid; pthread_attr_t attr; pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 32UL * 1024 * 1024);
+    if (pthread_create(&tid, &attr, ob_cuvs_job, &job) == 0) { pthread_join(tid, nullptr); }
+    pthread_attr_destroy(&attr);
+  }
   if (job.built_) { ob_vsag_trace("cuvs_build", key, static_cast<long>(ent->dim_), static_cast<long>(n)); }
   if (ent->bridge_ == nullptr || job.rc_ != 0) { return false; }
   // Post-filter: cuVS returned UNFILTERED top-k. Apply the query's row filter

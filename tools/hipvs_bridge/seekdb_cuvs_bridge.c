@@ -25,20 +25,21 @@ typedef struct {
  *
  * The frozen V5 baseline uses graph_degree=128, intermediate_graph_degree=256
  * and nn_descent_niter=100. Development comparisons at 250K vectors in both
- * 128 and 256 dimensions support a 75-iteration candidate while retaining the
- * graph degrees and search defaults. Formal contest quality is verified by CI.
+ * 128 and 256 dimensions support a 192-degree graph built from a 192-degree
+ * intermediate graph with 35 NN-Descent iterations. Search defaults are retained.
+ * Formal contest quality and resource limits are verified by CI.
  *
  * The parameters are therefore resolved from the environment at run time, so one
  * compiled artefact can be A/B tested on the AMD cloud instance without a rebuild.
- * Without overrides the candidate uses 75 iterations. The explicit baseline
- * profile restores 100 iterations for development comparisons. This is the same
+ * Without overrides the candidate uses 192/192/35. The explicit baseline
+ * profile restores 128/256/100 for development comparisons. This is the same
  * selection for every build, independent of dataset identity or testing phase.
  *
  *   OB_CUVS_PROFILE                   baseline | fast | aggressive (optional)
  *   OB_CUVS_BUILD_ALGO                nn_descent (default) | iterative_search
- *   OB_CUVS_GRAPH_DEGREE              default 128
- *   OB_CUVS_INTERMEDIATE_GRAPH_DEGREE default 256
- *   OB_CUVS_NN_DESCENT_NITER          default 75
+ *   OB_CUVS_GRAPH_DEGREE              default 192
+ *   OB_CUVS_INTERMEDIATE_GRAPH_DEGREE default 192
+ *   OB_CUVS_NN_DESCENT_NITER          default 35
  *   OB_CUVS_ITOPK_SIZE                default: keep the library default
  *   OB_CUVS_SEARCH_WIDTH              default 4
  *
@@ -68,17 +69,19 @@ static long sk_env_long(const char* name, long dflt, long lo, long hi)
 
 static void sk_resolve_params(sk_cuvs_params* p)
 {
-  /* Keep V5 graph/search settings; reduce only the construction iterations. */
+  /* Retain more final edges while reducing intermediate work; use FP32 throughout. */
   p->build_algo = NN_DESCENT;
-  p->graph_degree = 128;
-  p->intermediate_graph_degree = 256;
-  p->nn_descent_niter = 75;
+  p->graph_degree = 192;
+  p->intermediate_graph_degree = 192;
+  p->nn_descent_niter = 35;
   p->itopk_size = 0;
   p->search_width = 4;
 
   const char* profile = getenv("OB_CUVS_PROFILE");
   if (profile != NULL && profile[0] != '\0') {
     if (strcmp(profile, "baseline") == 0) {
+      p->graph_degree = 128;
+      p->intermediate_graph_degree = 256;
       p->nn_descent_niter = 100;
     } else if (strcmp(profile, "fast") == 0) {
       p->graph_degree = 64;

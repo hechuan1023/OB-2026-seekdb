@@ -1,5 +1,8 @@
 # 75-iteration CAGRA candidate
 
+Historical round-2 candidate. On `amd-cagra-opt-round3`, see
+[AMD-CANDIDATE-ROUND3.md](AMD-CANDIDATE-ROUND3.md) for current defaults and checks.
+
 This candidate is based on V5 commit `634888d9b037153fa143d2c913ba4b25503e1d62`.
 Development branch: `amd-cagra-opt-round2`. The older `amd-cagra-submit` branch is
 not updated by this change.
