@@ -26,23 +26,24 @@ typedef struct {
  *
  * The frozen V5 baseline uses graph_degree=128, intermediate_graph_degree=256
  * and nn_descent_niter=100. Development comparisons at 250K vectors in both
- * 128 and 256 dimensions support a 64-degree graph built from a 64-degree
- * intermediate graph with 8 NN-Descent iterations and a 4096-candidate search.
+ * 128 and 256 dimensions supported the prior MULTI_CTA candidate. This
+ * experimental branch instead uses 128/128/15 construction and a 512-candidate
+ * SINGLE_CTA search with width 32. GPU quality/performance validation is pending.
  * Formal contest quality and resource limits are verified by CI.
  *
  * The parameters are therefore resolved from the environment at run time, so one
  * compiled artefact can be A/B tested on the AMD cloud instance without a rebuild.
- * Without overrides the candidate uses 64/64/8. The explicit baseline
+ * Without overrides this experiment uses 128/128/15. The explicit baseline
  * profile restores 128/256/100 for development comparisons. This is the same
  * selection for every build, independent of dataset identity or testing phase.
  *
  *   OB_CUVS_PROFILE                   baseline | fast | aggressive (optional)
  *   OB_CUVS_BUILD_ALGO                nn_descent (default) | iterative_search
- *   OB_CUVS_GRAPH_DEGREE              default 64
- *   OB_CUVS_INTERMEDIATE_GRAPH_DEGREE default 64
- *   OB_CUVS_NN_DESCENT_NITER          default 8
- *   OB_CUVS_ITOPK_SIZE                default 4096; baseline retains its original policy
- *   OB_CUVS_SEARCH_WIDTH              default 4
+ *   OB_CUVS_GRAPH_DEGREE              default 128
+ *   OB_CUVS_INTERMEDIATE_GRAPH_DEGREE default 128
+ *   OB_CUVS_NN_DESCENT_NITER          default 15
+ *   OB_CUVS_ITOPK_SIZE                default 512; baseline retains its original policy
+ *   OB_CUVS_SEARCH_WIDTH              default 32
  *
  * Any explicit OB_CUVS_* variable wins over the profile.
  * ------------------------------------------------------------------------- */
@@ -72,11 +73,11 @@ static void sk_resolve_params(sk_cuvs_params* p)
 {
   /* Reduce construction work and retain a wider GPU search frontier; all FP32. */
   p->build_algo = NN_DESCENT;
-  p->graph_degree = 64;
-  p->intermediate_graph_degree = 64;
-  p->nn_descent_niter = 8;
-  p->itopk_size = 4096;
-  p->search_width = 4;
+  p->graph_degree = 128;
+  p->intermediate_graph_degree = 128;
+  p->nn_descent_niter = 15;
+  p->itopk_size = 512;
+  p->search_width = 32;
 
   const char* profile = getenv("OB_CUVS_PROFILE");
   if (profile != NULL && profile[0] != '\0') {
@@ -85,16 +86,19 @@ static void sk_resolve_params(sk_cuvs_params* p)
       p->intermediate_graph_degree = 256;
       p->nn_descent_niter = 100;
       p->itopk_size = 0;
+      p->search_width = 4;
     } else if (strcmp(profile, "fast") == 0) {
       p->graph_degree = 64;
       p->intermediate_graph_degree = 128;
       p->nn_descent_niter = 30;
       p->itopk_size = 0;
+      p->search_width = 4;
     } else if (strcmp(profile, "aggressive") == 0) {
       p->graph_degree = 64;
       p->intermediate_graph_degree = 128;
       p->nn_descent_niter = 20;
       p->itopk_size = 0;
+      p->search_width = 4;
     }
   }
 
@@ -189,7 +193,7 @@ int seekdb_cuvs_search(void* handle, const float* query, long nq, long topk,
       // The frozen hipVS SINGLE_CTA kernel rejects the larger frontier. Keep
       // its original selection for baseline-sized requests; use the library's
       // MULTI_CTA search implementation for the wider configured frontier.
-      if (p.itopk_size > 512) { sp->algo = MULTI_CTA; }
+      sp->algo = p.itopk_size > 512 ? MULTI_CTA : SINGLE_CTA;
       sp->search_width = (int)p.search_width;
     }
     cuvsFilter f; f.type=NO_FILTER; f.addr=(uintptr_t)0;
