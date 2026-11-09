@@ -1,0 +1,38 @@
+{
+  "image_id": "sha256:5d89f8491af1115ceeec8f564c00cb3d34f6d23d86f1cde728c2e1133fc4122e",
+  "platform": "linux/amd64",
+  "network": "none",
+  "cpu_limit": 2,
+  "memory_limit_bytes": 67108864,
+  "swap_disabled": true,
+  "checks_passed": [
+    "read-own-writes, multirow statement atomicity, rollback",
+    "SIGKILL preserves acknowledged commit and discards uncommitted vector snapshot",
+    "EOF rollback and same-volume restart",
+    "PID 1 SIGTERM rollback and restart"
+  ],
+  "container_exits": [
+    {
+      "signal": "KILL",
+      "exit_code": 137,
+      "oom_killed": false
+    },
+    {
+      "signal": "EOF",
+      "exit_code": 0,
+      "oom_killed": false
+    },
+    {
+      "signal": "TERM",
+      "exit_code": 0,
+      "oom_killed": false
+    },
+    {
+      "signal": "EOF",
+      "exit_code": 0,
+      "oom_killed": false
+    }
+  ],
+  "elapsed_seconds": 2.487879,
+  "official_protocol_checked": false
+}

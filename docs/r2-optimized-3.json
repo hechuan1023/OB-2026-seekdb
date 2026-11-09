@@ -1,0 +1,38 @@
+{
+  "rows": 10000,
+  "dimensions": 128,
+  "queries": 200,
+  "seed": 20261109,
+  "mode": "exact",
+  "write_seconds": 3.426114,
+  "query_seconds": 1.486547,
+  "recovery_seconds": 0.410648,
+  "wal_bytes": 6202671,
+  "preparation_seconds": 0.383105,
+  "warmup_queries": 4,
+  "extra_args": [],
+  "workload_version": 2,
+  "windows_peak_working_set_bytes": 39202816,
+  "filtered_recall_at_10": 1.0,
+  "unfiltered_recall_at_10": 1.0,
+  "restart_content_verified": true,
+  "source_sha256": {
+    "minivectordb/__init__.py": "813ab12de56c56e9a2964ebba4b5cf8a0af254a7c3e37e8843093ae05c3f8c13",
+    "minivectordb/__main__.py": "bd1ab14744fbffdb390bc4d5df6b4678b88f8385c5300a1bbbc8250b5033092e",
+    "minivectordb/build_native.py": "413fa35724165f877a97ea15c3d67e4faf31ef54f25864c17a3a9910f0579a72",
+    "minivectordb/engine.py": "3223d36814c70364e87b50c48ac0b10edd4360cc4796d9106664a5274f07d3a8",
+    "minivectordb/errors.py": "d65edb6fb0d6cecc232b0bc57ef4505fdaa6a005c3f544c6e0557094872310d3",
+    "minivectordb/protocol.py": "06ff07b150fbd844edc39a6f11ebf052588bb31c82966b38ca7daa68d289278e",
+    "minivectordb/sorting.py": "ba9fac1e55d1e346d1e5cd57848b8e8b967386fd12ea94159525ace58d78967d",
+    "minivectordb/sql.py": "4a2c18b9b533016cfdbb9dbf4a3a1b9d7164d3650540e87f60506b5ed8dd66b6",
+    "minivectordb/storage.py": "213749a1cd5889f50e64282fc137422db4e2b0d7ca63dcc5501b85f581e2eb15",
+    "minivectordb/vector_index.py": "0153def37d85a99539088441a61739af0ed7e676321ed4d40251f724bc1d2426",
+    "native/exact.cpp": "0e156546df587b8b7efebf774d1cf8df772460ba42554d7f15a2854c23cf47fa"
+  },
+  "native_library_sha256": {
+    "_native.dll": "98a4d6a4a4138d33959600c9eba66b809570e8b45e61d0a95bb67b49a778dc86"
+  },
+  "data_files_bytes": 12189103,
+  "derived_index_bytes": 5200000,
+  "caveat": "Local Windows smoke benchmark, not Linux cgroup T/B/M or official score"
+}

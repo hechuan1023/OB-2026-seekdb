@@ -1,0 +1,16 @@
+{
+  "rows": 10000,
+  "dimensions": 128,
+  "queries": 1000,
+  "seed": 20261109,
+  "mode": "exact",
+  "write_seconds": 8.124969,
+  "query_seconds": 143.595392,
+  "recovery_seconds": 0.255641,
+  "wal_bytes": 6202671,
+  "windows_peak_working_set_bytes": 27287552,
+  "filtered_recall_at_10": 1.0,
+  "unfiltered_recall_at_10": 1.0,
+  "restart_content_verified": true,
+  "caveat": "Local Windows smoke benchmark, not Linux cgroup T/B/M or official score"
+}

@@ -1,0 +1,9 @@
+[project]
+name = "minivectordb"
+version = "0.1.0"
+requires-python = ">=3.11"
+description = "Standalone SQL vector database with disk-backed transactions"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,10 @@
+*
+!minivectordb
+!minivectordb/**
+minivectordb/__pycache__
+minivectordb/_native.dll
+minivectordb/_native.so
+!native
+!native/*.cpp
+!Dockerfile
+!build-dependencies.lock

@@ -10,3 +10,15 @@
 *.i filter=codeformat
 *.ic filter=codeformat
 *.js filter=codeformat
+
+# Preserve verified source/report bytes across Windows and Linux checkouts.
+/minivectordb/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/tests/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/native/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol -filter
+/docs/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/agent/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/Dockerfile -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/build-dependencies.lock -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/pyproject.toml -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Tool transcripts retain original terminal whitespace.
+/docs/*.txt -whitespace

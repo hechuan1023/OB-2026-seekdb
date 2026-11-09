@@ -1,0 +1,10 @@
+{"phase": "loaded", "wal_bytes": 164694642}
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/app/tests/container_resource_probe.py", line 52, in <module>
+    main()
+  File "/app/tests/container_resource_probe.py", line 33, in main
+    assert row == [count - seen - 1, payload], (seen, row[0])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (0, 19999)

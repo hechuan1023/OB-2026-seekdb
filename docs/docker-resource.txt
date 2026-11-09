@@ -1,0 +1,19 @@
+{"phase": "loaded", "wal_bytes": 164694642}
+{
+  "rows_verified_after_reopen_and_external_sort": 20000,
+  "wal_bytes": 164694642,
+  "memory_max_bytes": 67108864,
+  "memory_peak_bytes": 67108864,
+  "memory_events": {
+    "low": "0",
+    "high": "0",
+    "max": "6864",
+    "oom": "0",
+    "oom_kill": "0",
+    "oom_group_kill": "0"
+  },
+  "swap_max_bytes": 0,
+  "elapsed_seconds": 19.259291,
+  "io_stat": "8:64 rbytes=793571328 wbytes=530558976 rios=40132 wios=3376 dbytes=0 dios=0\n",
+  "caveat": "Local Docker Desktop resource correctness probe, not official T/B/M."
+}
