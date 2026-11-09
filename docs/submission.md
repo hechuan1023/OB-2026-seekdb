@@ -13,6 +13,8 @@ python -m tests.validate_submission --git
 
 本文件与当前源码一同纳入 Git；不在提交内容中写入它自身的 commit SHA，以免产生循环依赖。源码字节摘要见 source-manifest.json，材料中的 version 与其一致。
 
+本轮在 `491f7611579dfc1f52e054dc376c22f89e72394e` 基础上优化索引失效并更新验证。最新版三轮容器对照、72 项测试及大向量资源验证在 [r3-optimization.md](r3-optimization.md)。source-manifest.json 区分当前报告与历史报告，历史报告核对其原提交，不能冒充当前源码成绩。
+
 | 产物 | 位置与状态 |
 | --- | --- |
 | 自研数据库 | minivectordb/、native/exact.cpp；SQL、存储、执行、事务、恢复与精确向量内核 |

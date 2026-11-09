@@ -58,6 +58,8 @@ class Engine:
         require(checkpoint_bytes >= 4096, 'TYPE_ERROR', 'Checkpoint threshold must be at least 4096 bytes')
         self.storage = Storage(directory, cache_memory, checkpoint_bytes)
         self.explicit = False
+        self.transaction_changes = {}
+        self.statement_changes = {}
         self.sort_memory = sort_memory
         self.mode = mode  # Both modes currently use the exact flat search path.
         self.vector_indexes = VectorIndexes(self.storage, sort_memory, native)
@@ -85,18 +87,22 @@ class Engine:
             require(not self.explicit, 'TRANSACTION_ERROR', 'Transaction already active')
             self.storage.begin()
             self.explicit = True
+            self.transaction_changes = {}
             return 0
         if op in ('commit', 'rollback'):
             require(self.explicit, 'TRANSACTION_ERROR', 'No active transaction')
-            self.vector_indexes.invalidate()
             getattr(self.storage, op)()
+            # A successful commit does not change the state seen by an existing
+            # snapshot. Rollback changes only tables/columns touched by this tx.
+            if op == 'rollback':
+                self.invalidate_changes(self.transaction_changes)
+            self.transaction_changes = {}
             self.explicit = False
             return 0
         if op == 'select':
             return self.select(*statement[1:])
         table = statement[2] if op == 'index' else statement[1]
-        if table in self.storage.schemas:
-            self.vector_indexes.invalidate(self.storage.schemas[table]['id'])
+        self.statement_changes = {}
         if not self.explicit:
             self.storage.begin()
         saved = self.storage.savepoint()
@@ -107,12 +113,40 @@ class Engine:
                 self.storage.restore(saved)
             else:
                 self.storage.rollback()
+            self.statement_changes = {}
             raise
+        # No query runs during a statement. Its old snapshots are still valid if
+        # it fails and restores its savepoint, even after partial row writes.
+        self.invalidate_changes(self.statement_changes)
+        if self.explicit:
+            for identifier, columns in self.statement_changes.items():
+                self.merge_change(self.transaction_changes, identifier, columns)
         if not self.explicit:
             self.storage.commit()
         if op == 'index':
             self.vector_indexes.ensure(self.table(table))
         return count
+
+    @staticmethod
+    def merge_change(changes, table, columns):
+        # None means row membership, vector values or index metadata changed.
+        if columns is None:
+            changes[table] = None
+        elif table not in changes or changes[table] is not None:
+            changes.setdefault(table, set()).update(columns)
+
+    def note_change(self, schema, columns=None):
+        if columns is not None and any(schema['columns'][i][1] == 'VECTOR' for i in columns):
+            columns = None
+        if columns is None or columns:
+            self.merge_change(self.statement_changes, schema['id'], columns)
+
+    def invalidate_changes(self, changes):
+        for table, columns in changes.items():
+            if columns is None:
+                self.vector_indexes.invalidate(table)
+            else:
+                self.vector_indexes.invalidate_filters(table, columns)
 
     def create(self, name, columns, primary):
         require(name not in self.storage.schemas, 'CONSTRAINT_ERROR', 'Table already exists')
@@ -125,6 +159,7 @@ class Engine:
         table_id = max((table['id'] for table in self.storage.schemas.values()), default=0) + 1
         schema = dict(id=table_id, columns=columns, pk=pk, indexes={})
         self.storage.append(('schema', name, schema))
+        self.note_change(schema)
         return 0
 
     def index(self, name, table, column):
@@ -135,6 +170,7 @@ class Engine:
         schema = copy.deepcopy(schema)
         schema['indexes'][name] = dict(column=column, algorithm='flat-exact')
         self.storage.append(('schema', table, schema))
+        self.note_change(schema)
         return 0
 
     def insert(self, table, columns, rows):
@@ -150,6 +186,7 @@ class Engine:
             key = row[schema['pk']]
             require(self.storage.get(schema['id'], key) is None, 'CONSTRAINT_ERROR', 'Duplicate primary key')
             self.storage.append(('row', schema['id'], key, row))
+            self.note_change(schema)
         return len(rows)
 
     def conditions(self, schema, clauses):
@@ -214,6 +251,8 @@ class Engine:
                             changed[i] = value
                         changed = tuple(changed)
                     self.storage.append(('row', schema['id'], key, changed))
+                    self.note_change(schema, None if changed is None else
+                                     {i for i, _ in updates if row[i] != changed[i]})
                     count += 1
         finally:
             os.unlink(path)

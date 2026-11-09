@@ -120,8 +120,12 @@ class VectorIndexes:
         for identifier in list(self.entries):
             if table is None or table == identifier:
                 self.entries.pop(identifier).close()
+        self.invalidate_filters(table)
+
+    def invalidate_filters(self, table=None, columns=None):
         for key in list(self.filters):
-            if table is None or key[0] == table:
+            if ((table is None or key[0] == table) and
+                    (columns is None or any(condition[0] in columns for condition in key[1]))):
                 _, size = self.filters.pop(key)
                 self.filter_bytes -= size
 

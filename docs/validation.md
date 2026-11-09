@@ -1,5 +1,7 @@
 # MiniVectorDB 优化与验证记录
 
+本文件保留上一版实验；当前源码已进一步优化索引失效。最新 72 项测试、独立容器三轮测量与超内存向量验证见 [r3-optimization.md](r3-optimization.md)。下文历史报告关联提交 `491f7611579dfc1f52e054dc376c22f89e72394e`，不再作为当前源码性能结果。
+
 日期：2026 年 11 月 9 日。下文保留 Windows x86_64、Python 3.11.9、MinGW g++ 8.1.0 的优化实验。现已完成 Linux Docker 验证并同步官方首批公开用例，最新结果见 [容器验证](docker-validation.md)，提交材料见 [交付清单](submission.md)。源码摘要见 [source-manifest.json](source-manifest.json)。
 
 ## 结果

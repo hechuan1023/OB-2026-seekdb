@@ -8,33 +8,63 @@
     "minivectordb/__init__.py": "813ab12de56c56e9a2964ebba4b5cf8a0af254a7c3e37e8843093ae05c3f8c13",
     "minivectordb/__main__.py": "bd1ab14744fbffdb390bc4d5df6b4678b88f8385c5300a1bbbc8250b5033092e",
     "minivectordb/build_native.py": "413fa35724165f877a97ea15c3d67e4faf31ef54f25864c17a3a9910f0579a72",
-    "minivectordb/engine.py": "19142537a6dec37e687f2019af6556ef4fdafd1f227aa2db2002cbb8710865b5",
+    "minivectordb/engine.py": "246aaead0ec0b92eab096056065e90a501547a171f8b6875dc71bedf12b92657",
     "minivectordb/errors.py": "d65edb6fb0d6cecc232b0bc57ef4505fdaa6a005c3f544c6e0557094872310d3",
     "minivectordb/protocol.py": "06ff07b150fbd844edc39a6f11ebf052588bb31c82966b38ca7daa68d289278e",
     "minivectordb/sorting.py": "ba9fac1e55d1e346d1e5cd57848b8e8b967386fd12ea94159525ace58d78967d",
     "minivectordb/sql.py": "4a2c18b9b533016cfdbb9dbf4a3a1b9d7164d3650540e87f60506b5ed8dd66b6",
     "minivectordb/storage.py": "213749a1cd5889f50e64282fc137422db4e2b0d7ca63dcc5501b85f581e2eb15",
-    "minivectordb/vector_index.py": "0153def37d85a99539088441a61739af0ed7e676321ed4d40251f724bc1d2426",
+    "minivectordb/vector_index.py": "81d79b76ab25a2c419cdff6e68d54fc63979b26ce8554dfc7e1c6588a021de8a",
     "native/exact.cpp": "0e156546df587b8b7efebf774d1cf8df772460ba42554d7f15a2854c23cf47fa",
     "pyproject.toml": "b13ae7a42e05d3505490d713cdd9ce20cbb215ec3dafe6bfa38e9605f0a5387d",
     "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tests/benchmark.py": "097cf7f7a8f1138352624e81de8543a37a88a5801cb60676945b41e1e6760693",
+    "tests/container_benchmark.py": "6ae0b8288f2e8c991d5d4e7146bbcb3087e29161d1762a09dbf779de159f839d",
     "tests/container_resource_probe.py": "df77d2ea3977736d049eb5a068495a7c1a7e4ffc1161bda360128d538a6a7345",
+    "tests/container_vector_pressure.py": "dc5393fc9b9f4643683a8c4feb68b00f885ad10e3cf7aa59dc0ccd762345f2ca",
     "tests/docker_validation.py": "50af8de7ffec16b110d7ae0a112fffa5a0ed2ba1c6ad545036ded1e070e31351",
+    "tests/measure_entry.py": "766ea4aef39765f461e02cc3ffc9a0a45be64de55d90ff500843d128389f4405",
     "tests/test_engine.py": "0ad2f45546dc46bfc63b1c4ccfa5f89ec06d948f87659a2474ea9ba8cfeced8a",
+    "tests/test_index_lifecycle.py": "cb8a211bd58f71cf719ee1bb0b57e92d18a4c7e71d5f3a3addf4260a9e34e9fc",
     "tests/test_memory.py": "41c816642906a6bdbf80e36377455019e85bd1b5a19a01cc40be24549bff3959",
     "tests/test_public_cases.py": "8d7e90234552aa27d20b284390f92244edcf067bfa2be1b5af53bb452209b4cf",
     "tests/test_recovery.py": "279824ed10b8bc34f5bd00ad11908f1abb93a7cf2b4b6e400438562578410168",
     "tests/test_vector_index.py": "1fb266d2342874ffc8d258b6a4bdd76e0080e4b12192791122faa49ef5bcdbcd",
-    "tests/validate_submission.py": "be1ce88436743a5fe5f24e992df3336f126d0e6c73ab3eb62ffbd0a3dac88cb7"
+    "tests/validate_submission.py": "bee23f494102e46f266fea76bcf94ba0000f31630ed961c453ab051f673cc6e7"
   },
   "verified_reports": [
-    "docs/r2-final-1.json",
-    "docs/r2-final-2.json",
-    "docs/r2-final-3.json",
-    "docs/r2-final-full.json",
-    "docs/r2-final-portable.json",
-    "docs/docker-benchmark.json"
+    "docs/r3-optimized.json"
   ],
-  "initial_base_commit": "c842a368c3394748d0499386c18f6b465242e141"
+  "initial_base_commit": "c842a368c3394748d0499386c18f6b465242e141",
+  "development_parent_commit": "491f7611579dfc1f52e054dc376c22f89e72394e",
+  "historical_reports": [
+    {
+      "path": "docs/r2-final-1.json",
+      "source_commit": "491f7611579dfc1f52e054dc376c22f89e72394e"
+    },
+    {
+      "path": "docs/r2-final-2.json",
+      "source_commit": "491f7611579dfc1f52e054dc376c22f89e72394e"
+    },
+    {
+      "path": "docs/r2-final-3.json",
+      "source_commit": "491f7611579dfc1f52e054dc376c22f89e72394e"
+    },
+    {
+      "path": "docs/r2-final-full.json",
+      "source_commit": "491f7611579dfc1f52e054dc376c22f89e72394e"
+    },
+    {
+      "path": "docs/r2-final-portable.json",
+      "source_commit": "491f7611579dfc1f52e054dc376c22f89e72394e"
+    },
+    {
+      "path": "docs/docker-benchmark.json",
+      "source_commit": "491f7611579dfc1f52e054dc376c22f89e72394e"
+    },
+    {
+      "path": "docs/r3-baseline.json",
+      "source_commit": "491f7611579dfc1f52e054dc376c22f89e72394e"
+    }
+  ]
 }

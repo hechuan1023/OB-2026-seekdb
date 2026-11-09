@@ -1,0 +1,30 @@
+{"phase": "indexed", "vector_bytes": 73728000, "limit": 67108864}
+{"phase": "long_transaction_verified", "stage_bytes": 4208488}
+{
+  "rows": 18000,
+  "dimensions": 1024,
+  "vector_bytes": 73728000,
+  "wal_bytes": 79911878,
+  "transaction_stage_bytes": 4208488,
+  "memory_max_bytes": 67108864,
+  "memory_peak_bytes": 67108864,
+  "memory_events": {
+    "low": "0",
+    "high": "0",
+    "max": "23591",
+    "oom": "0",
+    "oom_kill": "0",
+    "oom_group_kill": "0"
+  },
+  "elapsed_seconds": 63.02740067900004,
+  "checks": [
+    "exact and filtered TopK at 0%, 1%, 20%, 80%, 100% selectivity",
+    "long transaction partial failure and rollback",
+    "scalar commit",
+    "restart",
+    "SIGKILL after dirty vector snapshot",
+    "committed state restored and temp cleanup"
+  ],
+  "io_stat": "8:64 rbytes=4857962496 wbytes=408449024 rios=408946 wios=2728 dbytes=0 dios=0\n",
+  "caveat": "Local resource correctness probe; probe and DB child both counted; not official score."
+}

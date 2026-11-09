@@ -45,11 +45,17 @@ def main():
             assert blob == (ROOT / name).read_bytes(), f'Uncommitted material: {name}'
     for name in manifest.get('verified_reports', []):
         report = json.loads((ROOT / name).read_text(encoding='utf-8'))
-        for source, digest in report['source_sha256'].items():
+        for source, digest in {**report['source_sha256'], **report.get('driver_sha256', {})}.items():
             assert manifest['sha256'][source] == digest, f'Benchmark source mismatch: {name}: {source}'
+    for historical in manifest.get('historical_reports', []):
+        report = json.loads((ROOT / historical['path']).read_text(encoding='utf-8'))
+        for source, digest in report['source_sha256'].items():
+            blob = subprocess.check_output(['git', 'show', f"{historical['source_commit']}:{source}"], cwd=ROOT)
+            assert hashlib.sha256(blob).hexdigest() == digest, f'Historical source mismatch: {historical["path"]}: {source}'
     print(json.dumps({'conversation_bytes': len(data), 'json_valid': True,
                       'source_files_verified': len(manifest['sha256']),
                       'benchmark_reports_verified': len(manifest.get('verified_reports', [])),
+                      'historical_reports_verified': len(manifest.get('historical_reports', [])),
                       'git_blob_verified': args.git,
                       'official_protocol_checked': False}, ensure_ascii=False))
 

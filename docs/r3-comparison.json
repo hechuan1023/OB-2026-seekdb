@@ -1,0 +1,68 @@
+{
+  "baseline_commit": "491f7611579dfc1f52e054dc376c22f89e72394e",
+  "driver_hashes_identical": true,
+  "baseline_medians": {
+    "write_seconds": 3.4111093999999866,
+    "query_seconds": 3.407834400003594,
+    "recovery_seconds": 0.6508937999997215,
+    "mixed_seconds": {
+      "read_only_commit": 0.3292233000001943,
+      "zero_match": 0.341553799999474,
+      "text_update": 0.3314667000004192,
+      "filter_update": 0.33324859999947876,
+      "vector_update": 0.33765600000015183,
+      "failed_insert": 0.3008703999998943
+    }
+  },
+  "optimized_medians": {
+    "write_seconds": 3.083168999999998,
+    "query_seconds": 3.511451900006705,
+    "recovery_seconds": 0.6212204000003112,
+    "mixed_seconds": {
+      "read_only_commit": 0.10540119999996023,
+      "zero_match": 0.11019749999968553,
+      "text_update": 0.09516910000047574,
+      "filter_update": 0.14631079999981011,
+      "vector_update": 0.333433000000241,
+      "failed_insert": 0.05653179999990243
+    }
+  },
+  "mixed_time_reduction_percent": {
+    "read_only_commit": 67.98489049836446,
+    "zero_match": 67.73641517094664,
+    "text_update": 71.28848840611882,
+    "filter_update": 56.095599501381564,
+    "vector_update": 1.2506811666041506,
+    "failed_insert": 81.21058103425186
+  },
+  "static_query_change_percent": 3.0405673469051653,
+  "build_count_per_round": {
+    "baseline": [
+      49,
+      49,
+      49
+    ],
+    "optimized": [
+      9,
+      9,
+      9
+    ]
+  },
+  "snapshot_logical_bytes_per_round": {
+    "baseline": [
+      254800000,
+      254800000,
+      254800000
+    ],
+    "optimized": [
+      46800000,
+      46800000,
+      46800000
+    ]
+  },
+  "mixed_memory_peak_median_bytes": {
+    "baseline": 37543936,
+    "optimized": 37588992
+  },
+  "official_score": null
+}
