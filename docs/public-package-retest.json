@@ -1,0 +1,22 @@
+{
+  "commit": "69c2bbbd221557a1b756cb6c7bf15bfd89be07d9",
+  "upstream_commit": "a3dba559c1e7ebdc48bc990ffb1a4c75d1c1075c",
+  "package_version": "minivectordb-public-basic-v1",
+  "image_id": "sha256:a0828ee8955c0f4a2e551de7f366c722c0c3de730eb6276386f695e43067945f",
+  "case_order": [
+    "sql_crud",
+    "sql_comparisons",
+    "sql_ordering",
+    "sql_empty",
+    "vector_euclidean"
+  ],
+  "case_count": 5,
+  "sql_count_per_path": 32,
+  "execution_paths": [
+    "typed",
+    "stdio"
+  ],
+  "exit_code": 0,
+  "output": "test_sql_crud_typed (tests.test_public_cases.PublicCases.test_sql_crud_typed) ... Image source SHA256 and native ABI verified\nok\ntest_sql_crud_stdio (tests.test_public_cases.PublicCases.test_sql_crud_stdio) ... ok\ntest_sql_comparisons_typed (tests.test_public_cases.PublicCases.test_sql_comparisons_typed) ... ok\ntest_sql_comparisons_stdio (tests.test_public_cases.PublicCases.test_sql_comparisons_stdio) ... ok\ntest_sql_ordering_typed (tests.test_public_cases.PublicCases.test_sql_ordering_typed) ... ok\ntest_sql_ordering_stdio (tests.test_public_cases.PublicCases.test_sql_ordering_stdio) ... ok\ntest_sql_empty_typed (tests.test_public_cases.PublicCases.test_sql_empty_typed) ... ok\ntest_sql_empty_stdio (tests.test_public_cases.PublicCases.test_sql_empty_stdio) ... ok\ntest_vector_euclidean_typed (tests.test_public_cases.PublicCases.test_vector_euclidean_typed) ... ok\ntest_vector_euclidean_stdio (tests.test_public_cases.PublicCases.test_vector_euclidean_stdio) ... ok\n\n----------------------------------------------------------------------\nRan 10 tests in 0.983s\n\nOK\n",
+  "official_protocol_checked": false
+}
