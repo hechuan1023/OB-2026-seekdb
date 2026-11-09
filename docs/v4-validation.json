@@ -1,0 +1,86 @@
+{
+  "date": "2026-11-09",
+  "development_parent_commit": "5d78f92a21418340a95331e8ae3eed6439bd0da5",
+  "upstream_commit": "9f6df2ba5acf871376e22b64a3d0724e4b575044",
+  "image_id": "sha256:e125eda8d833fbf38d7fc0bd63c748393d51ee6a27731ae73bd09bf6b4370038",
+  "source_sha256": {
+    "Dockerfile": "940e9045478c36d2833a49069d0a24abb9f23c45021097b9ceff2d1263f989e3",
+    "build-dependencies.lock": "0e0f3d6bcff271e667b136eb9954505f45d9658ebef5b0ddff018327725c757a",
+    "minivectordb/__init__.py": "813ab12de56c56e9a2964ebba4b5cf8a0af254a7c3e37e8843093ae05c3f8c13",
+    "minivectordb/__main__.py": "228e78f83a61fa31adbe70a1b7986824f74741c41f645245ce185c660c84d75c",
+    "minivectordb/build_native.py": "413fa35724165f877a97ea15c3d67e4faf31ef54f25864c17a3a9910f0579a72",
+    "minivectordb/engine.py": "246aaead0ec0b92eab096056065e90a501547a171f8b6875dc71bedf12b92657",
+    "minivectordb/errors.py": "d65edb6fb0d6cecc232b0bc57ef4505fdaa6a005c3f544c6e0557094872310d3",
+    "minivectordb/protocol.py": "58431431e9228869bea4e3a24179a063fe35e975efd56514b130ab181d131d5a",
+    "minivectordb/sorting.py": "ba9fac1e55d1e346d1e5cd57848b8e8b967386fd12ea94159525ace58d78967d",
+    "minivectordb/sql.py": "4a2c18b9b533016cfdbb9dbf4a3a1b9d7164d3650540e87f60506b5ed8dd66b6",
+    "minivectordb/storage.py": "213749a1cd5889f50e64282fc137422db4e2b0d7ca63dcc5501b85f581e2eb15",
+    "minivectordb/vector_index.py": "81d79b76ab25a2c419cdff6e68d54fc63979b26ce8554dfc7e1c6588a021de8a",
+    "native/exact.cpp": "0e156546df587b8b7efebf774d1cf8df772460ba42554d7f15a2854c23cf47fa",
+    "pyproject.toml": "b13ae7a42e05d3505490d713cdd9ce20cbb215ec3dafe6bfa38e9605f0a5387d",
+    "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/benchmark.py": "097cf7f7a8f1138352624e81de8543a37a88a5801cb60676945b41e1e6760693",
+    "tests/container_benchmark.py": "6ae0b8288f2e8c991d5d4e7146bbcb3087e29161d1762a09dbf779de159f839d",
+    "tests/container_resource_probe.py": "df77d2ea3977736d049eb5a068495a7c1a7e4ffc1161bda360128d538a6a7345",
+    "tests/container_vector_pressure.py": "dc5393fc9b9f4643683a8c4feb68b00f885ad10e3cf7aa59dc0ccd762345f2ca",
+    "tests/docker_validation.py": "50af8de7ffec16b110d7ae0a112fffa5a0ed2ba1c6ad545036ded1e070e31351",
+    "tests/measure_entry.py": "766ea4aef39765f461e02cc3ffc9a0a45be64de55d90ff500843d128389f4405",
+    "tests/run_public_cases.py": "d1ab1a28941594eb11b980e09002cbe0d99623344e23c91da027f1da8a16f0df",
+    "tests/test_engine.py": "0ad2f45546dc46bfc63b1c4ccfa5f89ec06d948f87659a2474ea9ba8cfeced8a",
+    "tests/test_index_lifecycle.py": "cb8a211bd58f71cf719ee1bb0b57e92d18a4c7e71d5f3a3addf4260a9e34e9fc",
+    "tests/test_memory.py": "41c816642906a6bdbf80e36377455019e85bd1b5a19a01cc40be24549bff3959",
+    "tests/test_public_adapter.py": "63f38d455aee507b8f7c24ee6de70e269fd6ddc7778f6fe02c9b7d930b2e82d8",
+    "tests/test_public_cases.py": "020ee06dde89adc48db46f8a8fa1cd72b6dce41bffb08383a72b35345361c0fe",
+    "tests/test_recovery.py": "279824ed10b8bc34f5bd00ad11908f1abb93a7cf2b4b6e400438562578410168",
+    "tests/test_vector_index.py": "1fb266d2342874ffc8d258b6a4bdd76e0080e4b12192791122faa49ef5bcdbcd",
+    "tests/validate_submission.py": "b65449d32f80a36ae1b728c5401e9be66a4968480cf96ad6defc9a87a8a1638d",
+    "docs/v4-windows-tests.txt": "630a623c9844a767e50864d086598a4b568c8426694620e05adafd957c103ff0",
+    "docs/v4-linux-full-tests.txt": "42ec22a947a14e1afe4ee3854e475e7b87eb85e0cd75060b280b089898b46fc9",
+    "docs/v4-linux-public-tests.txt": "7911a285b18f220ed5c1e499f08c1875a9356fd0fbfc1427b856f9b53048a440",
+    "docs/v4-lifecycle.json": "5457ba3fe30a4a624bdb68314f72717656428d416122fa3aaf05ce57ff301236"
+  },
+  "checks": [
+    {
+      "command": "python -X utf8 -m unittest discover -v",
+      "environment": "Windows host",
+      "exit_code": 0,
+      "output": "----------------------------------------------------------------------\nRan 106 tests in 41.958s\n\nOK"
+    },
+    {
+      "command": "docker run --rm --network none --cpus=2 --memory=256m --memory-swap=256m -e TMPDIR=/data -v <repo>/tests:/app/tests:ro -v <repo>/mysqltest:/app/mysqltest:ro --entrypoint python minivectordb:public-v4 -m unittest discover -v",
+      "environment": "Linux x86_64 container",
+      "exit_code": 0,
+      "output": "----------------------------------------------------------------------\nRan 106 tests in 22.885s\n\nOK"
+    },
+    {
+      "command": "docker build --platform linux/amd64 --progress plain -t minivectordb:public-v4 .",
+      "exit_code": 0,
+      "output": "#14 naming to docker.io/library/minivectordb:public-v4 done\n#14 DONE 0.7s"
+    },
+    {
+      "command": "docker run --rm --network none --entrypoint python minivectordb:public-v4 -c <SHA256 and NativeKernel ABI checks>",
+      "exit_code": 0,
+      "output": "Image source bytes and native ABI verified"
+    },
+    {
+      "command": "python -X utf8 -m tests.docker_validation --image minivectordb:public-v4 --output docs/v4-lifecycle.json",
+      "exit_code": 0,
+      "output": "{\"image_id\": \"sha256:e125eda8d833fbf38d7fc0bd63c748393d51ee6a27731ae73bd09bf6b4370038\", \"platform\": \"linux/amd64\", \"network\": \"none\", \"cpu_limit\": 2, \"memory_limit_bytes\": 67108864, \"swap_disabled\": true, \"checks_passed\": [\"read-own-writes, multirow statement atomicity, rollback\", \"SIGKILL preserves acknowledged commit and discards uncommitted vector snapshot\", \"EOF rollback and same-volume restart\", \"PID 1 SIGTERM rollback and restart\"], \"container_exits\": [{\"signal\": \"KILL\", \"exit_code\": 137, \"oom_killed\": false}, {\"signal\": \"EOF\", \"exit_code\": 0, \"oom_killed\": false}, {\"signal\": \"TERM\", \"exit_code\": 0, \"oom_killed\": false}, {\"signal\": \"EOF\", \"exit_code\": 0, \"oom_killed\": false}], \"elapsed_seconds\": 3.673298, \"official_protocol_checked\": false}"
+    }
+  ],
+  "initial_adapter_failure": {
+    "command": "python -X utf8 -m unittest tests.test_public_cases.PublicCases.test_vector_index_maintenance_stdio tests.test_public_cases.PublicCases.test_sql_primary_key_typed -v",
+    "adapter_source_commit": "5d78f92a21418340a95331e8ae3eed6439bd0da5",
+    "upstream_commit": "9f6df2ba5acf871376e22b64a3d0724e4b575044",
+    "exit_code": 1,
+    "output_excerpt": "AssertionError: 11 != 9\nminivectordb.errors.DBError: Duplicate primary key\nRan 2 tests in 1.101s\nFAILED (failures=1, errors=1)"
+  },
+  "official_protocol_checked": false,
+  "performance_remeasured": false,
+  "package_checkout_fix": {
+    "initial_output": "AssertionError: Public package modified: mysqltest/README.md",
+    "cause": "All 42 public package files had checkout CRLF, canonical upstream blobs use LF; no SQL or expected value differences.",
+    "fix": "Pin /mysqltest/** -text; restore and compare exact upstream bytes; rerun 40 public tests.",
+    "final_public_output_excerpt": "----------------------------------------------------------------------\nRan 40 tests in 4.998s\n\nOK"
+  }
+}

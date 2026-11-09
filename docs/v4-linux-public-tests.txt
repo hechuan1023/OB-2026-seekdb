@@ -1,0 +1,46 @@
+test_sql_crud_typed (tests.test_public_cases.PublicCases.test_sql_crud_typed) ... ok
+test_sql_crud_stdio (tests.test_public_cases.PublicCases.test_sql_crud_stdio) ... ok
+test_sql_comparisons_typed (tests.test_public_cases.PublicCases.test_sql_comparisons_typed) ... ok
+test_sql_comparisons_stdio (tests.test_public_cases.PublicCases.test_sql_comparisons_stdio) ... ok
+test_sql_ordering_typed (tests.test_public_cases.PublicCases.test_sql_ordering_typed) ... ok
+test_sql_ordering_stdio (tests.test_public_cases.PublicCases.test_sql_ordering_stdio) ... ok
+test_sql_empty_typed (tests.test_public_cases.PublicCases.test_sql_empty_typed) ... ok
+test_sql_empty_stdio (tests.test_public_cases.PublicCases.test_sql_empty_stdio) ... ok
+test_sql_primary_key_typed (tests.test_public_cases.PublicCases.test_sql_primary_key_typed) ... ok
+test_sql_primary_key_stdio (tests.test_public_cases.PublicCases.test_sql_primary_key_stdio) ... ok
+test_sql_unicode_typed (tests.test_public_cases.PublicCases.test_sql_unicode_typed) ... ok
+test_sql_unicode_stdio (tests.test_public_cases.PublicCases.test_sql_unicode_stdio) ... ok
+test_sql_bigint_typed (tests.test_public_cases.PublicCases.test_sql_bigint_typed) ... ok
+test_sql_bigint_stdio (tests.test_public_cases.PublicCases.test_sql_bigint_stdio) ... ok
+test_sql_unsupported_typed (tests.test_public_cases.PublicCases.test_sql_unsupported_typed) ... ok
+test_sql_unsupported_stdio (tests.test_public_cases.PublicCases.test_sql_unsupported_stdio) ... ok
+test_storage_restart_typed (tests.test_public_cases.PublicCases.test_storage_restart_typed) ... ok
+test_storage_restart_stdio (tests.test_public_cases.PublicCases.test_storage_restart_stdio) ... ok
+test_vector_euclidean_typed (tests.test_public_cases.PublicCases.test_vector_euclidean_typed) ... ok
+test_vector_euclidean_stdio (tests.test_public_cases.PublicCases.test_vector_euclidean_stdio) ... ok
+test_transaction_commit_typed (tests.test_public_cases.PublicCases.test_transaction_commit_typed) ... ok
+test_transaction_commit_stdio (tests.test_public_cases.PublicCases.test_transaction_commit_stdio) ... ok
+test_transaction_rollback_typed (tests.test_public_cases.PublicCases.test_transaction_rollback_typed) ... ok
+test_transaction_rollback_stdio (tests.test_public_cases.PublicCases.test_transaction_rollback_stdio) ... ok
+test_storage_mutations_typed (tests.test_public_cases.PublicCases.test_storage_mutations_typed) ... ok
+test_storage_mutations_stdio (tests.test_public_cases.PublicCases.test_storage_mutations_stdio) ... ok
+test_storage_multiple_tables_typed (tests.test_public_cases.PublicCases.test_storage_multiple_tables_typed) ... ok
+test_storage_multiple_tables_stdio (tests.test_public_cases.PublicCases.test_storage_multiple_tables_stdio) ... ok
+test_vector_ties_and_filter_typed (tests.test_public_cases.PublicCases.test_vector_ties_and_filter_typed) ... ok
+test_vector_ties_and_filter_stdio (tests.test_public_cases.PublicCases.test_vector_ties_and_filter_stdio) ... ok
+test_vector_float32_typed (tests.test_public_cases.PublicCases.test_vector_float32_typed) ... ok
+test_vector_float32_stdio (tests.test_public_cases.PublicCases.test_vector_float32_stdio) ... ok
+test_vector_index_maintenance_typed (tests.test_public_cases.PublicCases.test_vector_index_maintenance_typed) ... ok
+test_vector_index_maintenance_stdio (tests.test_public_cases.PublicCases.test_vector_index_maintenance_stdio) ... ok
+test_transaction_failed_insert_typed (tests.test_public_cases.PublicCases.test_transaction_failed_insert_typed) ... ok
+test_transaction_failed_insert_stdio (tests.test_public_cases.PublicCases.test_transaction_failed_insert_stdio) ... ok
+test_transaction_autocommit_atomic_typed (tests.test_public_cases.PublicCases.test_transaction_autocommit_atomic_typed) ... ok
+test_transaction_autocommit_atomic_stdio (tests.test_public_cases.PublicCases.test_transaction_autocommit_atomic_stdio) ... ok
+test_transaction_shutdown_rollback_typed (tests.test_public_cases.PublicCases.test_transaction_shutdown_rollback_typed) ... ok
+test_transaction_shutdown_rollback_stdio (tests.test_public_cases.PublicCases.test_transaction_shutdown_rollback_stdio) ... ok
+
+----------------------------------------------------------------------
+Ran 40 tests in 4.998s
+
+OK
+{"case_count": 20, "counts_per_path": {"sql": 95, "restart": 7, "mode": 1, "expected_error": 4}, "tests_run": 40, "exit_code": 0}

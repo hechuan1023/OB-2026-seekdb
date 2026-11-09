@@ -2,17 +2,30 @@
 import json
 import re
 from array import array
+from typing import NamedTuple
 
 from .errors import DBError
 
 SPECIAL = re.compile(r"['`;#]|--|/\*")
 
 
-def statements(stream):
+class ModeChange(NamedTuple):
+    mode: str
+
+
+def statements(stream, local_mode_controls=False):
     buffer = []
     quote = None
     block_comment = False
     for line in stream:
+        # Opt-in LOCAL control only between complete SQL statements, never
+        # inside a string or multiline SQL. Default SQL comment rules stay intact.
+        if local_mode_controls and not quote and not block_comment and not ''.join(buffer).strip():
+            control = re.fullmatch(r'--mode\s+(exact|ann)', line.strip())
+            if control:
+                buffer = []
+                yield ModeChange(control.group(1))
+                continue
         i = 0
         while i < len(line):
             if block_comment:

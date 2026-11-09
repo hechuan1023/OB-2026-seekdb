@@ -2,7 +2,7 @@
 
 - Read `docs/minivectordb-requirements.md`, `README.md`, and `docs/validation.md` before changes.
 - Upstream public SQL cases are in `mysqltest/`; do not modify their inputs or expected results to make tests pass. They do not specify the process protocol.
-- The official round2 protocol is not included in the checked-out base commit. Keep provisional protocol behavior isolated and explicitly labeled.
+- The public-v4 package (9f6df2ba5) includes 20 cases and local driver instructions but no complete official runtime protocol. Keep provisional protocol behavior isolated and explicitly labeled; test mode changes must preserve the active process/transaction.
 - Storage, execution, transactions, and vector indexes must be implemented here. Do not use existing database engines or vector index libraries.
 - All database data, logs, indexes, and temporary files belong under the configured data directory (default `/data`).
 - Preserve statement atomicity inside explicit transactions and acknowledge commits only after durable WAL synchronization.

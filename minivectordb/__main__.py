@@ -4,7 +4,7 @@ import sys
 
 from .engine import Engine
 from .errors import DBError
-from .protocol import error, result, statements
+from .protocol import ModeChange, error, result, statements
 from .sql import Parser
 
 
@@ -17,6 +17,8 @@ def main():
     parser.add_argument('--checkpoint-mib', type=float, default=64)
     parser.add_argument('--no-ready', action='store_true')
     parser.add_argument('--disable-native', action='store_true')
+    parser.add_argument('--local-mode-controls', action='store_true',
+                        help='Enable local self-test --mode lines; NOT an official wire protocol')
     args = parser.parse_args()
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         if hasattr(stream, 'reconfigure'):
@@ -30,8 +32,12 @@ def main():
         if not args.no_ready:
             print('READY', flush=True)
         try:
-            for sql in statements(sys.stdin):
+            for sql in statements(sys.stdin, local_mode_controls=args.local_mode_controls):
                 try:
+                    if isinstance(sql, ModeChange):
+                        engine.mode = sql.mode
+                        result(sys.stdout, 0)
+                        continue
                     parsed = Parser(sql)
                     if parsed.tokens:
                         result(sys.stdout, engine.execute_statement(parsed.parse()))

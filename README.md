@@ -2,7 +2,7 @@
 
 自研的单进程轻量向量数据库，使用 Python 标准库实现 SQL、磁盘存储和事务，并提供自行编写的 C++ 精确 TopK 内核。没有使用现成数据库引擎或向量索引库。
 
-**当前已通过 Linux 容器验证和首批公开 SQL 样例，尚未完成正式评测协议适配。** 起始于官方 `c842a368c3394748d0499386c18f6b465242e141`，现已快进合入 `a3dba559c1e7ebdc48bc990ffb1a4c75d1c1075c` 的公开用例。`mysqltest/README.md` 明确这些用例不包含完整驱动，也不代表新的运行协议发布。
+**当前已通过 Linux 容器验证和 v4 公开自测题包，尚未完成正式评测协议适配。** 起始于官方 `c842a368c3394748d0499386c18f6b465242e141`，现已合入 `9f6df2ba5acf871376e22b64a3d0724e4b575044` 的 20 组、95 条 SQL。`mysqltest/README.md` 仍明确不包含完整运行驱动。此前用户反馈正式提测未通过且没有详细日志；失败阶段和原因尚未确认，不能用本地通过结果覆盖该反馈。
 
 ## 启动与测试
 
@@ -12,6 +12,7 @@
 python -m minivectordb.build_native
 python -m minivectordb --data-dir .local-data
 python -m unittest discover -v
+python -m tests.run_public_cases --output .local-public-v4.json
 python -m tests.benchmark --output .local-benchmark.json
 ```
 
@@ -54,7 +55,7 @@ docker run --rm -i -v minivectordb-data:/data minivectordb:dev
 
 Dockerfile 用固定 SHA256 digest 的 Python 3.11 Bookworm 镜像进行多阶段构建，编译阶段的 32 项 Debian 包版本记录在 `build-dependencies.lock`。源码编译得到自研 C++ 共享库；编译器和本地预编译文件不进入最终镜像，运行时无需联网。依赖版本下架时构建应失败，不能静默换版；正式允许的镜像和依赖范围仍待确认。
 
-Linux 最新验证：72 项测试通过，其中首批公开 5 组、32 条 SQL 分别经类型化执行器和本地 stdin/stdout 适配器核对；真实容器强杀、EOF 和 SIGTERM 恢复通过。新增 64 MiB、无 swap 压力测试：73,728,000 字节向量文件完成精确/过滤查询、长事务失败与回滚、提交、重启及脏快照强杀恢复，无 OOM。最新命令与三轮对照见 [本轮优化记录](docs/r3-optimization.md)；上轮大文本外部排序验证保留在 [历史容器验证](docs/docker-validation.md)。这些结果不等于官方协议预检或正式准入。
+Linux 最新验证：106 项测试通过（22.885 秒），Windows 106 项通过（41.958 秒）。v4 公开题包按 manifest 顺序在类型化执行器和本地 stdin/stdout 路径分别执行，共 40 项检查、每条路径 95 条 SQL、7 次正常重启、1 次 ann 切换和 4 个预期错误；独立公开重测 4.998 秒。实际镜像的强杀、EOF 和 SIGTERM 恢复也通过。详见 [v4 验证与复盘](docs/public-v4-validation.md)。以下为上轮历史压力结果，未在本轮重复测量：64 MiB、无 swap 压力测试中，73,728,000 字节向量文件完成精确/过滤查询、长事务失败与回滚、提交、重启及脏快照强杀恢复，无 OOM。最新命令与三轮对照见 [本轮优化记录](docs/r3-optimization.md)；上轮大文本外部排序验证保留在 [历史容器验证](docs/docker-validation.md)。这些结果不等于官方协议预检或正式准入。
 
 ## 功能状态
 
@@ -82,6 +83,7 @@ Linux 最新验证：72 项测试通过，其中首批公开 5 组、32 条 SQL 
 - 查询：`RESULT<TAB>列名...`，随后每行一个 TSV 记录，最后 `END<TAB>行数`。
 - 错误：`ERROR<TAB>错误类别<TAB>说明`，失败后可继续发送下一语句。
 - 字符串输出转义反斜杠、Tab、换行和回车；向量输出为紧凑数组文本。
+- `--local-mode-controls` 是仅用于本地自测的显式开关，允许在完整 SQL 之间发送独立的 `--mode exact` / `--mode ann` 行，返回 `OK<TAB>0`；切换保留进程及事务，默认关闭。它不是官方模式传输约定。题包的 `--restart` 由测试适配器关闭并重新启动进程，不发送给 SQL 解析器。
 - 日志与致命 I/O 错误写 stderr；存储故障终止进程，不在潜在已持久化提交后继续报告普通失败。
 
 临时错误类别包括 `SYNTAX_ERROR`、`TYPE_ERROR`、`INVALID_VECTOR`、`CONSTRAINT_ERROR`、`NOT_FOUND`、`TRANSACTION_ERROR`、`UNSUPPORTED`。官方错误码待替换。

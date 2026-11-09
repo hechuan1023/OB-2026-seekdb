@@ -52,10 +52,24 @@ def main():
         for source, digest in report['source_sha256'].items():
             blob = subprocess.check_output(['git', 'show', f"{historical['source_commit']}:{source}"], cwd=ROOT)
             assert hashlib.sha256(blob).hexdigest() == digest, f'Historical source mismatch: {historical["path"]}: {source}'
+    for name in manifest.get('validation_reports', []):
+        report = json.loads((ROOT / name).read_text(encoding='utf-8'))
+        for source, digest in report['source_sha256'].items():
+            assert hashlib.sha256((ROOT / source).read_bytes()).hexdigest() == digest, f'Validation source mismatch: {name}: {source}'
+    upstream = manifest.get('upstream_package_commit')
+    if upstream:
+        names = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', upstream, '--', 'mysqltest'], cwd=ROOT, text=True).splitlines()
+        actual = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / 'mysqltest').rglob('*') if p.is_file())
+        assert actual == sorted(names), 'Public package files differ from upstream'
+        for name in names:
+            blob = subprocess.check_output(['git', 'show', f'{upstream}:{name}'], cwd=ROOT)
+            assert blob == (ROOT / name).read_bytes(), f'Public package modified: {name}'
     print(json.dumps({'conversation_bytes': len(data), 'json_valid': True,
                       'source_files_verified': len(manifest['sha256']),
                       'benchmark_reports_verified': len(manifest.get('verified_reports', [])),
                       'historical_reports_verified': len(manifest.get('historical_reports', [])),
+                      'validation_reports_verified': len(manifest.get('validation_reports', [])),
+                      'upstream_package_verified': bool(upstream),
                       'git_blob_verified': args.git,
                       'official_protocol_checked': False}, ensure_ascii=False))
 
