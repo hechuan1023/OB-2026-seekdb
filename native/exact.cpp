@@ -33,9 +33,10 @@ MV_EXPORT int mv_abi_version() { return 1; }
 
 // Retain K+1 candidates. Python verifies a conservative boundary gap, re-evaluates
 // selected distances with math.dist, and falls back on ambiguous boundaries.
-// Four independent compensated chains: lane j uses (j & 3), and the lanes are
+// Eight independent compensated chains: lane j uses (j & 7), and the lanes are
 // combined in a fixed order, so the result is bitwise identical regardless of
-// which SIMD width the compiler picks for the per-lane inner loops.
+// which SIMD width the compiler picks for the per-lane inner loops. More lanes
+// shorten the loop-carried dependency that prevents wide vectorization.
 MV_TARGET_CLONES MV_EXPORT std::int64_t mv_topk(
     const float *vectors, const std::int64_t *keys, std::uint64_t rows,
     std::uint64_t dimensions, const float *query, const std::uint64_t *selection,
@@ -53,11 +54,11 @@ MV_TARGET_CLONES MV_EXPORT std::int64_t mv_topk(
       const std::uint64_t row = selection ? selection[n] : n;
       if (row >= rows) return -1;
       const float *v = vectors + row * dimensions;
-      double acc[4] = {0.0, 0.0, 0.0, 0.0};
-      double cor[4] = {0.0, 0.0, 0.0, 0.0};
+      double acc[8] = {0.0};
+      double cor[8] = {0.0};
       std::uint64_t j = 0;
-      for (; j + 4 <= dimensions; j += 4) {
-        for (std::uint64_t lane = 0; lane < 4; ++lane) {
+      for (; j + 8 <= dimensions; j += 8) {
+        for (std::uint64_t lane = 0; lane < 8; ++lane) {
           const double delta = static_cast<double>(v[j + lane]) - query[j + lane];
           const double term = delta * delta - cor[lane];
           const double next = acc[lane] + term;
@@ -66,7 +67,7 @@ MV_TARGET_CLONES MV_EXPORT std::int64_t mv_topk(
         }
       }
       for (; j < dimensions; ++j) {
-        const std::uint64_t lane = j & 3;
+        const std::uint64_t lane = j & 7;
         const double delta = static_cast<double>(v[j]) - query[j];
         const double term = delta * delta - cor[lane];
         const double next = acc[lane] + term;
@@ -74,7 +75,7 @@ MV_TARGET_CLONES MV_EXPORT std::int64_t mv_topk(
         acc[lane] = next;
       }
       double sum = 0.0, correction = 0.0;
-      for (std::uint64_t lane = 0; lane < 4; ++lane) {
+      for (std::uint64_t lane = 0; lane < 8; ++lane) {
         const double term = acc[lane] - correction;
         const double next = sum + term;
         correction = (next - sum) - term;

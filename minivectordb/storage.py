@@ -59,9 +59,22 @@ class DiskHash:
         self.file = open(self.path, 'w+b')
         self.file.truncate(capacity * SLOT.size)
         self.map = mmap.mmap(self.file.fileno(), 0)
+        # Little-endian hosts can probe slots through a cast view, avoiding a
+        # tuple per probe. Big-endian hosts keep the portable struct path.
+        self.view = memoryview(self.map).cast('q') if sys.byteorder == 'little' else None
 
     def _slot(self, table, key):
         slot = hash_key(table, key) & (self.capacity - 1)
+        if self.view is not None:
+            view = self.view
+            base = slot * 3
+            for _ in range(self.capacity):
+                t = view[base]
+                if t == 0 or (t == table and view[base + 1] == key):
+                    return slot, t, view[base + 2]
+                slot = (slot + 1) & (self.capacity - 1)
+                base = slot * 3
+            raise RuntimeError('Hash table is full')
         for _ in range(self.capacity):
             t, k, value = SLOT.unpack_from(self.map, slot * SLOT.size)
             if t == 0 or (t == table and k == key):
@@ -98,8 +111,12 @@ class DiskHash:
         self.count = replacement.count
         self.file = open(self.path, 'r+b')
         self.map = mmap.mmap(self.file.fileno(), 0)
+        self.view = memoryview(self.map).cast('q') if sys.byteorder == 'little' else None
 
     def close(self):
+        if self.view is not None:
+            self.view.release()
+            self.view = None
         self.map.close()
         self.file.close()
 

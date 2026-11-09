@@ -33,7 +33,9 @@ def convert(literal, column):
         values = json.loads(literal.value)
         if not isinstance(values, list) or len(values) != size:
             raise ValueError('Vector dimension mismatch')
-        if any(type(value) not in (int, float) for value in values):
+        # set membership via map avoids a generator frame per element; bool is
+        # rejected because type(True) is bool, not int.
+        if not all(map(_VECTOR_NUMERIC_TYPES.__contains__, map(type, values))):
             raise ValueError('Vector values must be finite numbers')
         result = array('f', values)  # float64-to-float32 溢出在此抛 OverflowError
         if not all(map(math.isfinite, result)):  # NaN/Infinity 转换后仍为非有限值
@@ -47,6 +49,9 @@ def convert(literal, column):
 class QueryResult:
     columns: list
     rows: object
+
+
+_VECTOR_NUMERIC_TYPES = frozenset({int, float})
 
 
 class Engine:
