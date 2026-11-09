@@ -11,6 +11,14 @@
 #define MV_EXPORT extern "C" __attribute__((visibility("default")))
 #endif
 
+// Runtime-dispatched AVX2 clone on Linux/glibc; the default clone stays the
+// portable x86-64 baseline. -ffp-contract=off keeps every clone bit-identical.
+#if defined(__linux__) && defined(__x86_64__) && defined(__GNUC__) && !defined(__clang__)
+#define MV_TARGET_CLONES __attribute__((target_clones("default", "avx2")))
+#else
+#define MV_TARGET_CLONES
+#endif
+
 struct Candidate {
   double distance;
   std::int64_t key;
@@ -25,8 +33,10 @@ MV_EXPORT int mv_abi_version() { return 1; }
 
 // Retain K+1 candidates. Python verifies a conservative boundary gap, re-evaluates
 // selected distances with math.dist, and falls back on ambiguous boundaries.
-// Compensated nonnegative summation avoids dimension-dependent naive sum error.
-MV_EXPORT std::int64_t mv_topk(
+// Four independent compensated chains: lane j uses (j & 3), and the lanes are
+// combined in a fixed order, so the result is bitwise identical regardless of
+// which SIMD width the compiler picks for the per-lane inner loops.
+MV_TARGET_CLONES MV_EXPORT std::int64_t mv_topk(
     const float *vectors, const std::int64_t *keys, std::uint64_t rows,
     std::uint64_t dimensions, const float *query, const std::uint64_t *selection,
     std::uint64_t selected, std::uint64_t keep, std::uint64_t *positions,
@@ -43,10 +53,29 @@ MV_EXPORT std::int64_t mv_topk(
       const std::uint64_t row = selection ? selection[n] : n;
       if (row >= rows) return -1;
       const float *v = vectors + row * dimensions;
-      double sum = 0.0, correction = 0.0;
-      for (std::uint64_t j = 0; j < dimensions; ++j) {
+      double acc[4] = {0.0, 0.0, 0.0, 0.0};
+      double cor[4] = {0.0, 0.0, 0.0, 0.0};
+      std::uint64_t j = 0;
+      for (; j + 4 <= dimensions; j += 4) {
+        for (std::uint64_t lane = 0; lane < 4; ++lane) {
+          const double delta = static_cast<double>(v[j + lane]) - query[j + lane];
+          const double term = delta * delta - cor[lane];
+          const double next = acc[lane] + term;
+          cor[lane] = (next - acc[lane]) - term;
+          acc[lane] = next;
+        }
+      }
+      for (; j < dimensions; ++j) {
+        const std::uint64_t lane = j & 3;
         const double delta = static_cast<double>(v[j]) - query[j];
-        const double term = delta * delta - correction;
+        const double term = delta * delta - cor[lane];
+        const double next = acc[lane] + term;
+        cor[lane] = (next - acc[lane]) - term;
+        acc[lane] = next;
+      }
+      double sum = 0.0, correction = 0.0;
+      for (std::uint64_t lane = 0; lane < 4; ++lane) {
+        const double term = acc[lane] - correction;
         const double next = sum + term;
         correction = (next - sum) - term;
         sum = next;

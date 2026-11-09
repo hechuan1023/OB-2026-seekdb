@@ -33,10 +33,10 @@ def convert(literal, column):
         values = json.loads(literal.value)
         if not isinstance(values, list) or len(values) != size:
             raise ValueError('Vector dimension mismatch')
-        if any(type(value) not in (int, float) or not math.isfinite(value) for value in values):
+        if any(type(value) not in (int, float) for value in values):
             raise ValueError('Vector values must be finite numbers')
-        result = array('f', values)
-        if not all(math.isfinite(value) for value in result):
+        result = array('f', values)  # float64-to-float32 溢出在此抛 OverflowError
+        if not all(map(math.isfinite, result)):  # NaN/Infinity 转换后仍为非有限值
             raise ValueError('float32 overflow')
         return result
     except (ValueError, OverflowError, TypeError, struct.error) as exc:
