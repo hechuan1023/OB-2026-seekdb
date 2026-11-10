@@ -209,10 +209,14 @@ class Engine:
         positions = [columns.index(name) for name in names]
         for values in rows:
             require(len(values) == len(names), 'TYPE_ERROR', 'Wrong number of values')
-            row = tuple(convert(values[positions[i]], col, self.native) for i, col in enumerate(schema['columns']))
+            row = tuple([convert(values[positions[i]], col, self.native)
+                         for i, col in enumerate(schema['columns'])])
             key = row[schema['pk']]
             require(self.storage.get(schema['id'], key) is None, 'CONSTRAINT_ERROR', 'Duplicate primary key')
             self.storage.append(('row', schema['id'], key, row))
+        if rows:
+            # One membership-change note covers the whole statement; a failed
+            # statement restores its savepoint before this point.
             self.note_change(schema)
         return len(rows)
 
