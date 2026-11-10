@@ -35,7 +35,7 @@
     "tests/test_memory.py": "41c816642906a6bdbf80e36377455019e85bd1b5a19a01cc40be24549bff3959",
     "tests/test_public_adapter.py": "63f38d455aee507b8f7c24ee6de70e269fd6ddc7778f6fe02c9b7d930b2e82d8",
     "tests/test_public_cases.py": "020ee06dde89adc48db46f8a8fa1cd72b6dce41bffb08383a72b35345361c0fe",
-    "tests/test_recovery.py": "bdeadb8e31a3bbaf045d70a91b697ddf06af73f898a91aa20cf9bf7779988169",
+    "tests/test_recovery.py": "7230b78f06fdb672f879a8254b2c524b0894f216588d291a5b2a45ca200c736e",
     "tests/test_vector_index.py": "d72bc1e58a1eaaa14627ddc7f8aab13be566f25ba5dab669381032a4542eef8f",
     "tests/validate_submission.py": "b65449d32f80a36ae1b728c5401e9be66a4968480cf96ad6defc9a87a8a1638d",
     "tests_cross/p0_transaction_kill.py": "62016593baa1b6aa486f30801e187785e4bd2139f835df083714bc5c70ef0c9b",

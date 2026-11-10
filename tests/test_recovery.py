@@ -239,3 +239,15 @@ class RecordFormatTests(unittest.TestCase):
             write_all(file, LENGTH.pack(len(data)) + data)
             file.seek(0)
             self.assertEqual(read_record(file, 0), row)
+
+    def test_large_string_row_uses_pickle_fallback(self):
+        from array import array
+        from minivectordb.storage import LENGTH, read_record, write_record
+
+        row = ('row', 1, 5, (5, 'x' * 300))
+        with tempfile.TemporaryFile() as file:
+            position = write_record(file, row)
+            file.seek(position)
+            length, = LENGTH.unpack(file.read(LENGTH.size))
+            self.assertEqual(file.read(length)[:1], b'\x00')
+            self.assertEqual(read_record(file, position), row)
