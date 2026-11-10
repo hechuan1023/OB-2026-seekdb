@@ -167,13 +167,13 @@ class NativeIndexTests(unittest.TestCase):
     def test_column_scan_cache_serves_high_cardinality_equality(self):
         self.db.execute('DELETE FROM t')
         self.db.execute('INSERT INTO t VALUES ' + ','.join(
-            f"({i},'x{i}','[{i},0,0,0]')" for i in range(2000)))
+            f"({i},'x{i}','[{i},0,0,0]')" for i in range(4000)))
         sql = "SELECT id FROM t WHERE tag='{}' ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 2"
-        self.assertEqual(self.compare_reference(sql.format('x1999')), [(1999,)])
+        self.assertEqual(self.compare_reference(sql.format('x3999')), [(3999,)])
         table = self.db.table('t')['id']
         self.assertIn((table, 1), self.db.vector_indexes.grouping_suppressed)
         self.assertIn((table, 1), self.db.vector_indexes.column_values)
-        for value in ('x0', 'x1000', 'x1998', 'missing'):
+        for value in ('x0', 'x2000', 'x3998', 'missing'):
             self.compare_reference(sql.format(value))
         self.assertLessEqual(self.db.vector_indexes.filter_bytes, self.db.vector_indexes.filter_budget)
 

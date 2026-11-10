@@ -138,7 +138,7 @@ class VectorIndexes:
         self.column_values = OrderedDict()
         self.grouping_suppressed = set()
         self.filter_bytes = 0
-        self.filter_budget = min(sort_memory // 2, 1024 * 1024)
+        self.filter_budget = min(sort_memory // 2, 1536 * 1024)
         self.max_groups = 4096
         self.max_keep = sort_memory // 512
         self.fallbacks = 0
