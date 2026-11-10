@@ -191,7 +191,9 @@ def records(file, start, end):
         next_position = file.tell()
         if next_position > end:
             raise RuntimeError('Record crosses transaction boundary')
-        yield position, record
+        # The serialized payload length lets _apply update live_bytes without
+        # seeking back to the record header.
+        yield position, record, next_position - position - LENGTH.size
         position = next_position
 
 
@@ -257,15 +259,15 @@ class Storage:
                 remaining -= len(chunk)
             if crc != checksum:
                 raise RuntimeError('WAL checksum mismatch')
-            for offset, record in records(self.wal, start, end):
-                self._apply(record, offset, self.index)
+            for offset, record, length in records(self.wal, start, end):
+                self._apply(record, offset, self.index, length)
                 failpoint('during_recovery')
             position = end + TRAILER.size
         self.wal.truncate(position)
         self.wal.seek(position)
         os.fsync(self.wal.fileno())
 
-    def _apply(self, record, offset, index):
+    def _apply(self, record, offset, index, length=None):
         if record[0] == 'schema':
             self.schemas[record[1]] = record[2]
         else:
@@ -277,8 +279,10 @@ class Storage:
                     self.wal.seek(old - 1)
                     self.live_bytes -= LENGTH.unpack(self.wal.read(LENGTH.size))[0] + LENGTH.size
                 if row is not None:
-                    self.wal.seek(offset)
-                    self.live_bytes += LENGTH.unpack(self.wal.read(LENGTH.size))[0] + LENGTH.size
+                    if length is None:
+                        self.wal.seek(offset)
+                        length = LENGTH.unpack(self.wal.read(LENGTH.size))[0]
+                    self.live_bytes += length + LENGTH.size
             else:
                 index.put(table, key, value)
 
@@ -298,7 +302,7 @@ class Storage:
         self.schemas = schemas
         self.overlay.close()
         self.overlay = DiskHash(self.directory / 'transaction.idx')
-        for offset, record in records(self.stage, 0, end):
+        for offset, record, _ in records(self.stage, 0, end):
             if record[0] == 'row':
                 self._apply(record, offset, self.overlay)
         self.stage.seek(end)
@@ -330,8 +334,8 @@ class Storage:
         write_all(self.wal, TRAILER.pack(b'DONE', end))
         os.fsync(self.wal.fileno())
         failpoint('after_commit_sync')
-        for offset, record in records(self.wal, start, start + end):
-            self._apply(record, offset, self.index)
+        for offset, record, length in records(self.wal, start, start + end):
+            self._apply(record, offset, self.index, length)
         self._finish()
         wal_bytes = os.fstat(self.wal.fileno()).st_size
         if wal_bytes >= self.checkpoint_bytes and wal_bytes > max(self.live_bytes * 3, 4096):
