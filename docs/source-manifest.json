@@ -10,7 +10,7 @@
     "minivectordb/build_native.py": "413fa35724165f877a97ea15c3d67e4faf31ef54f25864c17a3a9910f0579a72",
     "minivectordb/engine.py": "d44c1d138e789bce459eed16bc623f1ee46c522cbf2c7ec82eddef436b0e6a18",
     "minivectordb/errors.py": "d65edb6fb0d6cecc232b0bc57ef4505fdaa6a005c3f544c6e0557094872310d3",
-    "minivectordb/json_protocol.py": "a3f2c37c4b1cbef315e8be7e575767c1cbcd8c868006e7975a6fe450c55f8a57",
+    "minivectordb/json_protocol.py": "3bd5db1652210fb486dfe8f4e2ba8a3d913e781e83a00f9ed7340101ff1c74cb",
     "minivectordb/native.py": "9294fed233b17adb0468dfc8fae5dfaac3f0e9d5c205027df92eb94a69855db5",
     "minivectordb/protocol.py": "58431431e9228869bea4e3a24179a063fe35e975efd56514b130ab181d131d5a",
     "minivectordb/sorting.py": "ba9fac1e55d1e346d1e5cd57848b8e8b967386fd12ea94159525ace58d78967d",
