@@ -17,6 +17,12 @@ from .storage import failpoint
 
 KEY = struct.Struct('<q')
 
+# Small vector sets are kept in anonymous memory: the flat files are derived
+# and rebuildable, so writing them costs I/O (counted in B) without adding
+# durability. Larger sets keep the mapped-file path so they never require
+# table-sized anonymous memory.
+MEMORY_SNAPSHOT_LIMIT = 8 * 1024 * 1024
+
 
 class NativeKernel:
     def __init__(self):
@@ -59,13 +65,40 @@ class Snapshot:
         self.paths = [storage.directory / f'flat-{schema["id"]}.{extension}' for extension in ('vec', 'keys')]
         self.vectors = self.keys = None
         self.count = 0
-        with open(self.paths[0], 'wb') as vectors, open(self.paths[1], 'wb') as keys:
+        vectors, keys = bytearray(), bytearray()
+        row_bytes = self.dimensions * 4 + KEY.size
+        overlay = storage.overlay.count if storage.overlay is not None else 0
+        force_files = (storage.index.count + overlay) * row_bytes > MEMORY_SNAPSHOT_LIMIT
+        files = None
+        try:
             for row in storage.rows(schema['id']):
-                vectors.write(row[column].tobytes())
-                keys.write(KEY.pack(row[schema['pk']]))
+                if files is None and force_files:
+                    files = (open(self.paths[0], 'wb'), open(self.paths[1], 'wb'))
+                if files is None:
+                    vectors += row[column].tobytes()
+                    keys += KEY.pack(row[schema['pk']])
+                    if len(vectors) + len(keys) > MEMORY_SNAPSHOT_LIMIT:
+                        files = (open(self.paths[0], 'wb'), open(self.paths[1], 'wb'))
+                        files[0].write(vectors)
+                        files[1].write(keys)
+                        vectors = keys = None
+                else:
+                    files[0].write(row[column].tobytes())
+                    files[1].write(KEY.pack(row[schema['pk']]))
                 self.count += 1
                 failpoint('during_vector_rebuild')
-        if self.count:
+        except BaseException:
+            if files is not None:
+                for file in files:
+                    file.close()
+            raise
+        if not self.count:
+            return
+        if files is None:
+            self.vectors, self.keys = vectors, keys
+        else:
+            for file in files:
+                file.close()
             with open(self.paths[0], 'rb') as vectors, open(self.paths[1], 'rb') as keys:
                 # Private writable mappings allow ctypes buffers, but the kernel
                 # never writes. All backing files remain under the data directory.
@@ -77,7 +110,7 @@ class Snapshot:
 
     def close(self):
         for mapping in (self.vectors, self.keys):
-            if mapping is not None:
+            if isinstance(mapping, mmap.mmap):
                 mapping.close()
         for path in self.paths:
             path.unlink(missing_ok=True)

@@ -1,0 +1,317 @@
+{
+  "scope": "Local JSONL correctness and resource comparison; not the official benchmark.",
+  "date": "2026-11-11",
+  "images": {
+    "candidate": "sha256:9582cd77740e3c69c3f0029c0d108057ef127d024d306f8ecdb46c2da1c45764",
+    "previous": "sha256:3b5e7eb1ba0acc8e0a9bfb74d4496cb5c87d5b874971ffebd4518bfb66a98c46"
+  },
+  "source_sha256": {
+    "minivectordb/vector_index.py": "6a8d6fb830ec2acd0563f2b28e652c6812128ff740760133939a76cebee37bc0",
+    "minivectordb/engine.py": "2f05f7cb91395f828c68777c3679ad9b9289608d75638d18110f0e521bf8a358",
+    "native/exact.cpp": "f945884fa1dedc225fdd3146fd386218d583cfac32a52d299505b72d33e8da8a",
+    "tests/test_vector_index.py": "a62aeed779719cd958fe22185c037cdd915303675189f2c17e21ecae38007cb9"
+  },
+  "seed": 20261110,
+  "rows": 10000,
+  "dimensions": 128,
+  "k": 10,
+  "scenarios": {
+    "5": {
+      "groups": 5,
+      "queries": 1000,
+      "images": [
+        "minivectordb:mem-snapshot",
+        "minivectordb:perf-r5c"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:mem-snapshot",
+          "round": 1,
+          "write_seconds": 3.432284599999548,
+          "query_seconds": 1.988625000056345,
+          "filtered_seconds": 0.9290185998979723,
+          "unfiltered_seconds": 1.0596064001583727,
+          "memory_peak_bytes": 36798464,
+          "data_device_wbytes": 8609792,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 1,
+          "write_seconds": 3.4178495000087423,
+          "query_seconds": 2.5617943000834202,
+          "filtered_seconds": 1.2265656998933991,
+          "unfiltered_seconds": 1.335228600190021,
+          "memory_peak_bytes": 36900864,
+          "data_device_wbytes": 13811712,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=273 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:mem-snapshot",
+          "round": 2,
+          "write_seconds": 4.021151900000405,
+          "query_seconds": 2.4909353997645667,
+          "filtered_seconds": 1.1856441997806542,
+          "unfiltered_seconds": 1.3052911999839125,
+          "memory_peak_bytes": 36683776,
+          "data_device_wbytes": 8609792,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 2,
+          "write_seconds": 3.5419957999984035,
+          "query_seconds": 2.6643335000553634,
+          "filtered_seconds": 1.2825684001727495,
+          "unfiltered_seconds": 1.3817650998826139,
+          "memory_peak_bytes": 36839424,
+          "data_device_wbytes": 13811712,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:mem-snapshot",
+          "round": 3,
+          "write_seconds": 3.393954600003781,
+          "query_seconds": 2.5076952000381425,
+          "filtered_seconds": 1.1862943000014639,
+          "unfiltered_seconds": 1.3214009000366786,
+          "memory_peak_bytes": 36716544,
+          "data_device_wbytes": 8609792,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 3,
+          "write_seconds": 3.3824332999938633,
+          "query_seconds": 2.1192964999208925,
+          "filtered_seconds": 1.0131191999244038,
+          "unfiltered_seconds": 1.1061772999964887,
+          "memory_peak_bytes": 36855808,
+          "data_device_wbytes": 13811712,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=273 dbytes=0 dios=0"
+        }
+      ],
+      "medians": {
+        "minivectordb:mem-snapshot": {
+          "write_seconds": 3.432284599999548,
+          "query_seconds": 2.4909353997645667,
+          "filtered_seconds": 1.1856441997806542,
+          "unfiltered_seconds": 1.3052911999839125,
+          "memory_peak_bytes": 36716544,
+          "data_device_wbytes": 8609792
+        },
+        "minivectordb:perf-r5c": {
+          "write_seconds": 3.4178495000087423,
+          "query_seconds": 2.5617943000834202,
+          "filtered_seconds": 1.2265656998933991,
+          "unfiltered_seconds": 1.335228600190021,
+          "memory_peak_bytes": 36855808,
+          "data_device_wbytes": 13811712
+        }
+      }
+    },
+    "200": {
+      "groups": 200,
+      "queries": 1000,
+      "images": [
+        "minivectordb:mem-snapshot",
+        "minivectordb:perf-r5c"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:mem-snapshot",
+          "round": 1,
+          "write_seconds": 3.5102343000035034,
+          "query_seconds": 2.006056199563318,
+          "filtered_seconds": 0.8860335998906521,
+          "unfiltered_seconds": 1.1200225996726658,
+          "memory_peak_bytes": 36712448,
+          "data_device_wbytes": 8617984,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8617984 rios=0 wios=265 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 1,
+          "write_seconds": 3.110099400000763,
+          "query_seconds": 2.459430899907602,
+          "filtered_seconds": 1.0849082999047823,
+          "unfiltered_seconds": 1.3745226000028197,
+          "memory_peak_bytes": 36847616,
+          "data_device_wbytes": 13819904,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13819904 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:mem-snapshot",
+          "round": 2,
+          "write_seconds": 3.998944799997844,
+          "query_seconds": 2.379154000140261,
+          "filtered_seconds": 1.0137476000527386,
+          "unfiltered_seconds": 1.3654064000875223,
+          "memory_peak_bytes": 36704256,
+          "data_device_wbytes": 8617984,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8617984 rios=0 wios=265 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 2,
+          "write_seconds": 3.94714400000521,
+          "query_seconds": 2.2213554002228193,
+          "filtered_seconds": 0.9805947002314497,
+          "unfiltered_seconds": 1.2407606999913696,
+          "memory_peak_bytes": 36835328,
+          "data_device_wbytes": 13819904,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13819904 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:mem-snapshot",
+          "round": 3,
+          "write_seconds": 3.378672600010759,
+          "query_seconds": 2.046676899859449,
+          "filtered_seconds": 0.9129242001799867,
+          "unfiltered_seconds": 1.1337526996794622,
+          "memory_peak_bytes": 36724736,
+          "data_device_wbytes": 8617984,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8617984 rios=0 wios=265 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 3,
+          "write_seconds": 3.761849600006826,
+          "query_seconds": 2.1821730998635758,
+          "filtered_seconds": 0.9791027000610484,
+          "unfiltered_seconds": 1.2030703998025274,
+          "memory_peak_bytes": 36839424,
+          "data_device_wbytes": 13819904,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13819904 rios=0 wios=271 dbytes=0 dios=0"
+        }
+      ],
+      "medians": {
+        "minivectordb:mem-snapshot": {
+          "write_seconds": 3.5102343000035034,
+          "query_seconds": 2.046676899859449,
+          "filtered_seconds": 0.9129242001799867,
+          "unfiltered_seconds": 1.1337526996794622,
+          "memory_peak_bytes": 36712448,
+          "data_device_wbytes": 8617984
+        },
+        "minivectordb:perf-r5c": {
+          "write_seconds": 3.761849600006826,
+          "query_seconds": 2.2213554002228193,
+          "filtered_seconds": 0.9805947002314497,
+          "unfiltered_seconds": 1.2407606999913696,
+          "memory_peak_bytes": 36839424,
+          "data_device_wbytes": 13819904
+        }
+      }
+    },
+    "600": {
+      "groups": 600,
+      "queries": 1000,
+      "images": [
+        "minivectordb:mem-snapshot",
+        "minivectordb:perf-r5c"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:mem-snapshot",
+          "round": 1,
+          "write_seconds": 4.049125100005767,
+          "query_seconds": 2.248239099921193,
+          "filtered_seconds": 0.9779231999564217,
+          "unfiltered_seconds": 1.2703158999647712,
+          "memory_peak_bytes": 36937728,
+          "data_device_wbytes": 8626176,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8626176 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 1,
+          "write_seconds": 3.9804437999991933,
+          "query_seconds": 2.249089399978402,
+          "filtered_seconds": 0.9797213999845553,
+          "unfiltered_seconds": 1.2693679999938468,
+          "memory_peak_bytes": 37060608,
+          "data_device_wbytes": 13828096,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:mem-snapshot",
+          "round": 2,
+          "write_seconds": 3.8648772000015015,
+          "query_seconds": 2.10652920010034,
+          "filtered_seconds": 0.9669206001562998,
+          "unfiltered_seconds": 1.1396085999440402,
+          "memory_peak_bytes": 36925440,
+          "data_device_wbytes": 8626176,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8626176 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 2,
+          "write_seconds": 3.841693499998655,
+          "query_seconds": 2.013250100048026,
+          "filtered_seconds": 0.9002134999755071,
+          "unfiltered_seconds": 1.113036600072519,
+          "memory_peak_bytes": 37072896,
+          "data_device_wbytes": 13828096,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=273 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:mem-snapshot",
+          "round": 3,
+          "write_seconds": 3.897382600000128,
+          "query_seconds": 2.0965038001158973,
+          "filtered_seconds": 0.9403204999107402,
+          "unfiltered_seconds": 1.1561833002051571,
+          "memory_peak_bytes": 36909056,
+          "data_device_wbytes": 8626176,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8626176 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 3,
+          "write_seconds": 4.093610600000829,
+          "query_seconds": 2.107374600294861,
+          "filtered_seconds": 0.9798108000104548,
+          "unfiltered_seconds": 1.1275638002844062,
+          "memory_peak_bytes": 37068800,
+          "data_device_wbytes": 13828096,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=273 dbytes=0 dios=0"
+        }
+      ],
+      "medians": {
+        "minivectordb:mem-snapshot": {
+          "write_seconds": 3.897382600000128,
+          "query_seconds": 2.10652920010034,
+          "filtered_seconds": 0.9669206001562998,
+          "unfiltered_seconds": 1.1561833002051571,
+          "memory_peak_bytes": 36925440,
+          "data_device_wbytes": 8626176
+        },
+        "minivectordb:perf-r5c": {
+          "write_seconds": 3.9804437999991933,
+          "query_seconds": 2.107374600294861,
+          "filtered_seconds": 0.9797213999845553,
+          "unfiltered_seconds": 1.1275638002844062,
+          "memory_peak_bytes": 37068800,
+          "data_device_wbytes": 13828096
+        }
+      }
+    }
+  },
+  "pressure_64mib": {
+    "rows": 18000,
+    "dimensions": 1024,
+    "vector_bytes": 73728000,
+    "memory_peak_bytes": 67108864,
+    "elapsed_seconds": 65.63794331300005,
+    "oom": "0",
+    "oom_kill": "0"
+  },
+  "limitations": [
+    "Fixed seed and one data distribution per scenario; no cold-cache control.",
+    "io.stat is raw and device attribution is not verified; it is not official B.",
+    "The local driver includes Docker Desktop pipe and host-side SQL construction; it is not official T.",
+    "Small-dataset snapshots now use anonymous memory; large datasets still use mapped files."
+  ]
+}

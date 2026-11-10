@@ -177,6 +177,16 @@ class NativeIndexTests(unittest.TestCase):
             self.compare_reference(sql.format(value))
         self.assertLessEqual(self.db.vector_indexes.filter_bytes, self.db.vector_indexes.filter_budget)
 
+    def test_small_vector_snapshot_stays_in_memory(self):
+        self.compare_reference("SELECT id FROM t ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 5")
+        snapshot = self.db.vector_indexes.entries[self.db.table('t')['id']]
+        self.assertIsInstance(snapshot.vectors, bytearray)
+        self.assertFalse(list(Path(self.temp.name).glob('flat-*.vec')))
+        self.assertFalse(list(Path(self.temp.name).glob('flat-*.keys')))
+        # Mutations rebuild the snapshot and must keep results consistent.
+        self.db.execute("UPDATE t SET v='[1,2,3,4]' WHERE id=0")
+        self.assertEqual(self.compare_reference("SELECT id FROM t ORDER BY L2_DISTANCE(v,'[1,2,3,4]') LIMIT 1"), [(0,)])
+
     def test_ties_use_reference_and_primary_key(self):
         self.db.execute("UPDATE t SET v='[1,0,0,0]'")
         rows = self.compare_reference("SELECT id FROM t ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 7")

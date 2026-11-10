@@ -57,7 +57,7 @@ docker run --rm -i -v minivectordb-data:/data minivectordb:dev
 
 Dockerfile 用固定 SHA256 digest 的 Python 3.11 Bookworm 镜像进行多阶段构建，编译阶段的 32 项 Debian 包版本记录在 `build-dependencies.lock`。源码编译得到自研 C++ 共享库；编译器和本地预编译文件不进入最终镜像，运行时无需联网。依赖版本下架时构建应失败，不能静默换版；正式允许的镜像和依赖范围仍待确认。
 
-当前版本 Windows 与 Linux 容器完整回归均为 117 项通过；官方检查器针对实际 Docker 入口的握手与 20 组公开用例通过，详见 [JSONL 验证记录](docs/official-jsonl-validation.json)。64 MiB 超内存压力测试通过，`oom_kill` 为 0。内核距离计算、高基数列值缓存与原生向量解析的本地对照见 [过滤缓存优化记录](docs/jsonl-filter-optimization.md)。历史 v4 验证、旧版本的容器压力测试和测量分别见 [v4 验证与复盘](docs/public-v4-validation.md)、[容器验证](docs/docker-validation.md) 与 [优化记录](docs/r3-optimization.md)。这些结果不等于正式准入。
+当前版本 Windows 与 Linux 容器完整回归均为 118 项通过；官方检查器针对实际 Docker 入口的握手与 20 组公开用例通过，详见 [JSONL 验证记录](docs/official-jsonl-validation.json)。64 MiB 超内存压力测试通过，`oom_kill` 为 0。内核距离计算、高基数列值缓存、原生向量解析与小数据集内存快照的本地对照见 [过滤缓存优化记录](docs/jsonl-filter-optimization.md)。历史 v4 验证、旧版本的容器压力测试和测量分别见 [v4 验证与复盘](docs/public-v4-validation.md)、[容器验证](docs/docker-validation.md) 与 [优化记录](docs/r3-optimization.md)。这些结果不等于正式准入。
 
 ## 功能状态
 
@@ -103,7 +103,7 @@ Dockerfile 用固定 SHA256 digest 的 Python 3.11 Bookworm 镜像进行多阶�
 | sort-*.tmp | 排序归并临时文件 |
 | modify-*.tmp | UPDATE／DELETE 的语句候选记录暂存 |
 | checkpoint.wal | 原子发布前的压缩日志临时文件 |
-| flat-*.vec、flat-*.keys | 可重建的连续向量和主键文件，原生索引使用 mmap 读取 |
+| flat-*.vec、flat-*.keys | 可重建的连续向量和主键文件；小数据集直接驻留内存，大数据集写文件并由原生索引 mmap 读取 |
 
 `--sort-memory-mib` 默认 4，控制排序缓冲的保守估算预算；`--cache-memory-mib` 默认 16，限制不可变已提交记录的 LRU 缓存，设为 0 可禁用。它们不是整个进程的硬内存限额。表目录、输入 SQL／AST、单条记录及 Python 运行时仍占内存；mmap 索引与文件页缓存还需由正式 cgroup 测量。
 
