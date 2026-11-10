@@ -113,6 +113,10 @@ class Snapshot:
     def key(self, position):
         return KEY.unpack_from(self.keys, position * KEY.size)[0]
 
+    def vector(self, position):
+        start = position * self.dimensions * 4
+        return memoryview(self.vectors)[start:start + self.dimensions * 4].cast('f')
+
     def patch(self, rows, column):
         """Overwrite the vectors of updated rows without rebuilding the snapshot.
 
@@ -317,7 +321,7 @@ class VectorIndexes:
             self._cache_values(cache_key, values, value_bytes)
         return self._store_selection(key, selected, overhead)
 
-    def topk(self, schema, expression, conditions, limit, matches):
+    def topk(self, schema, expression, conditions, limit, matches, pk_only=False):
         if limit + 1 > self.max_keep:
             return None
         snapshot = self.ensure(schema)
@@ -343,9 +347,16 @@ class VectorIndexes:
                 return None
         verified = []
         for position, _ in nearest:
-            row = self.storage.get(schema['id'], snapshot.key(position))
-            distance = math.dist(row[expression[1]], expression[2])
-            verified.append((distance, row[schema['pk']], row))
+            if pk_only:
+                # The projection only needs the primary key and the distance:
+                # read both from the snapshot instead of probing the row index.
+                key = snapshot.key(position)
+                distance = math.dist(snapshot.vector(position), expression[2])
+                verified.append((distance, key, key))
+            else:
+                row = self.storage.get(schema['id'], snapshot.key(position))
+                distance = math.dist(row[expression[1]], expression[2])
+                verified.append((distance, row[schema['pk']], row))
         verified.sort(key=lambda item: (item[0], item[1]))
         # Hand the exact distance back so the projection does not recompute it.
         return [(item[2], item[0]) for item in verified[:limit]]

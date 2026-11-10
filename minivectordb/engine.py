@@ -358,13 +358,24 @@ class Engine:
                 return
             if (not point_lookup and limit is not None and len(sort_keys) == 1 and not sort_keys[0][1]
                     and sort_keys[0][0][0] == 'distance'):
-                nearest = self.vector_indexes.topk(schema, sort_keys[0][0], conditions, limit, self.matches)
+                distance_expression = sort_keys[0][0]
+                pk_expression = ('column', schema['pk'])
+                # When only the primary key and the distance are projected, the
+                # snapshot already holds both; skip the row-index probes.
+                pk_only = all(expr == pk_expression or expr == distance_expression
+                              for expr in expressions)
+                nearest = self.vector_indexes.topk(schema, distance_expression, conditions, limit,
+                                                   self.matches, pk_only)
                 if nearest is not None:
-                    distance_expression = sort_keys[0][0]
-                    for row, distance in nearest:
-                        # The kernel path already evaluated this exact distance.
-                        yield tuple(distance if expr == distance_expression else self.evaluate(row, expr)
-                                    for expr in expressions)
+                    if pk_only:
+                        for key, distance in nearest:
+                            yield tuple(key if expr == pk_expression else distance
+                                        for expr in expressions)
+                    else:
+                        for row, distance in nearest:
+                            # The kernel path already evaluated this exact distance.
+                            yield tuple(distance if expr == distance_expression else self.evaluate(row, expr)
+                                        for expr in expressions)
                     return
             candidates = self.candidates(schema, conditions)
             if not sort_keys:
