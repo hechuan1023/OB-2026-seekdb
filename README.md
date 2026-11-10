@@ -105,7 +105,7 @@ Dockerfile 用固定 SHA256 digest 的 Python 3.11 Bookworm 镜像进行多阶�
 | checkpoint.wal | 原子发布前的压缩日志临时文件 |
 | flat-*.vec、flat-*.keys | 可重建的连续向量和主键文件；小数据集直接驻留内存，大数据集写文件并由原生索引 mmap 读取 |
 
-`--sort-memory-mib` 默认 4，控制排序缓冲的保守估算预算；`--cache-memory-mib` 默认 16，限制不可变已提交记录的 LRU 缓存，设为 0 可禁用。它们不是整个进程的硬内存限额。表目录、输入 SQL／AST、单条记录及 Python 运行时仍占内存；mmap 索引与文件页缓存还需由正式 cgroup 测量。
+`--sort-memory-mib` 默认 4，控制排序缓冲的保守估算预算；`--cache-memory-mib` 默认 4，限制不可变已提交记录的 LRU 缓存，设为 0 可禁用。它们不是整个进程的硬内存限额。表目录、输入 SQL／AST、单条记录及 Python 运行时仍占内存；mmap 索引与文件页缓存还需由正式 cgroup 测量。
 
 提交后，日志达到 `--checkpoint-mib`（默认 64 MiB）且超过有效行记录大小的三倍时，执行流式日志压缩。压缩写入已同步的临时 WAL，再原子替换，重建索引并清空旧位置缓存。压缩期间需要同时容纳旧日志和新快照，准备空间仍须对照正式磁盘限制。
 
