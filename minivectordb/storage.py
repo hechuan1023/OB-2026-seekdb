@@ -310,16 +310,22 @@ class Storage:
 
     def commit(self):
         end = self.stage.seek(0, os.SEEK_END)
+        self.wal.seek(0, os.SEEK_END)
+        header_position = self.wal.tell()
+        # Write a placeholder checksum, copy the stage while computing the real
+        # one, then publish it before the footer. A crash before the footer
+        # leaves an incomplete transaction that recovery truncates; a complete
+        # transaction always carries its final checksum.
+        write_all(self.wal, HEADER.pack(b'TXN1', end, 0))
+        start = self.wal.tell()
         self.stage.seek(0)
         crc = 0
         while chunk := self.stage.read(65536):
             crc = zlib.crc32(chunk, crc)
-        self.wal.seek(0, os.SEEK_END)
-        write_all(self.wal, HEADER.pack(b'TXN1', end, crc))
-        start = self.wal.tell()
-        self.stage.seek(0)
-        while chunk := self.stage.read(65536):
             write_all(self.wal, chunk)
+        self.wal.seek(header_position)
+        write_all(self.wal, HEADER.pack(b'TXN1', end, crc))
+        self.wal.seek(start + end)
         failpoint('before_commit_footer')
         write_all(self.wal, TRAILER.pack(b'DONE', end))
         os.fsync(self.wal.fileno())
