@@ -31,10 +31,17 @@
     "119 unittest in the Linux container",
     "20/20 official public cases",
     "64 MiB pressure test oom_kill=0",
+    "P0 transaction kill 19/19",
     "P0 vector modes 180/180",
+    "P1 recovery timing 22/22",
+    "P2 SQL surface 166/166",
+    "P3 random model 3 seeds 0 failures",
+    "P4 edges 103/103",
     "P5 17/17",
     "P6 transaction matrix 41/41",
-    "P7 112/112"
+    "P7 112/112",
+    "P8 malformed 170/170",
+    "P9 protocol streams 33/33"
   ],
   "limitations": [
     "Fixed single run per image for the update/delete cycles; the delete difference is within noise.",
