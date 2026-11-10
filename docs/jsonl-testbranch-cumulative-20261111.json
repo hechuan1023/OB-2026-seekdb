@@ -889,5 +889,93 @@
       13811712,
       6627328
     ]
+  },
+  "final_wal_format_10groups": {
+    "groups": 10,
+    "queries": 1000,
+    "images": [
+      "minivectordb:perf-r5c",
+      "minivectordb:wal-format"
+    ],
+    "rounds": [
+      {
+        "image": "minivectordb:perf-r5c",
+        "round": 1,
+        "write_seconds": 3.075152599980356,
+        "query_seconds": 1.9712363995204214,
+        "filtered_seconds": 0.8924876998062246,
+        "unfiltered_seconds": 1.0787486997141968,
+        "memory_peak_bytes": 36872192,
+        "data_device_wbytes": 13811712
+      },
+      {
+        "image": "minivectordb:wal-format",
+        "round": 1,
+        "write_seconds": 2.600623700011056,
+        "query_seconds": 1.860049699578667,
+        "filtered_seconds": 0.8643529000401031,
+        "unfiltered_seconds": 0.9956967995385639,
+        "memory_peak_bytes": 31653888,
+        "data_device_wbytes": 6017024
+      },
+      {
+        "image": "minivectordb:perf-r5c",
+        "round": 2,
+        "write_seconds": 2.791898899973603,
+        "query_seconds": 1.8807830000878312,
+        "filtered_seconds": 0.8602243997738697,
+        "unfiltered_seconds": 1.0205586003139615,
+        "memory_peak_bytes": 36896768,
+        "data_device_wbytes": 13811712
+      },
+      {
+        "image": "minivectordb:wal-format",
+        "round": 2,
+        "write_seconds": 2.681765599991195,
+        "query_seconds": 1.770190199778881,
+        "filtered_seconds": 0.8364255999331363,
+        "unfiltered_seconds": 0.9337645998457447,
+        "memory_peak_bytes": 31133696,
+        "data_device_wbytes": 6017024
+      },
+      {
+        "image": "minivectordb:perf-r5c",
+        "round": 3,
+        "write_seconds": 3.0860212000261527,
+        "query_seconds": 1.9901402000978123,
+        "filtered_seconds": 0.9106645000865683,
+        "unfiltered_seconds": 1.079475700011244,
+        "memory_peak_bytes": 36585472,
+        "data_device_wbytes": 13811712
+      },
+      {
+        "image": "minivectordb:wal-format",
+        "round": 3,
+        "write_seconds": 2.8054451000061817,
+        "query_seconds": 1.8463098992942832,
+        "filtered_seconds": 0.8555818996101152,
+        "unfiltered_seconds": 0.990727999684168,
+        "memory_peak_bytes": 31137792,
+        "data_device_wbytes": 6017024
+      }
+    ],
+    "medians": {
+      "minivectordb:perf-r5c": {
+        "write_seconds": 3.075152599980356,
+        "query_seconds": 1.9712363995204214,
+        "filtered_seconds": 0.8924876998062246,
+        "unfiltered_seconds": 1.0787486997141968,
+        "memory_peak_bytes": 36872192,
+        "data_device_wbytes": 13811712
+      },
+      "minivectordb:wal-format": {
+        "write_seconds": 2.681765599991195,
+        "query_seconds": 1.8463098992942832,
+        "filtered_seconds": 0.8555818996101152,
+        "unfiltered_seconds": 0.990727999684168,
+        "memory_peak_bytes": 31137792,
+        "data_device_wbytes": 6017024
+      }
+    }
   }
 }
