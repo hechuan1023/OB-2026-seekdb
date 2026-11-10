@@ -297,6 +297,86 @@
           "data_device_wbytes": 6643712
         }
       }
+    },
+    "5_swapped_order": {
+      "groups": 5,
+      "queries": 1000,
+      "images": [
+        "minivectordb:perf-r5c",
+        "minivectordb:vec-patch"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 1,
+          "query_seconds": 2.174899700214155,
+          "filtered_seconds": 1.0288842001318699,
+          "unfiltered_seconds": 1.1460155000822851,
+          "memory_peak_bytes": 36823040,
+          "data_device_wbytes": 13811712
+        },
+        {
+          "image": "minivectordb:vec-patch",
+          "round": 1,
+          "query_seconds": 2.091704800041043,
+          "filtered_seconds": 0.9846553000825224,
+          "unfiltered_seconds": 1.1070494999585208,
+          "memory_peak_bytes": 36999168,
+          "data_device_wbytes": 6627328
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 2,
+          "query_seconds": 1.928601600084221,
+          "filtered_seconds": 0.9161536000465276,
+          "unfiltered_seconds": 1.0124480000376934,
+          "memory_peak_bytes": 36618240,
+          "data_device_wbytes": 13811712
+        },
+        {
+          "image": "minivectordb:vec-patch",
+          "round": 2,
+          "query_seconds": 1.9900390999537194,
+          "filtered_seconds": 0.9397138999775052,
+          "unfiltered_seconds": 1.0503251999762142,
+          "memory_peak_bytes": 36679680,
+          "data_device_wbytes": 6627328
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 3,
+          "query_seconds": 2.2090808002103586,
+          "filtered_seconds": 1.0508673002041178,
+          "unfiltered_seconds": 1.1582135000062408,
+          "memory_peak_bytes": 37167104,
+          "data_device_wbytes": 13811712
+        },
+        {
+          "image": "minivectordb:vec-patch",
+          "round": 3,
+          "query_seconds": 2.1604284001805354,
+          "filtered_seconds": 1.0350115000037476,
+          "unfiltered_seconds": 1.1254169001767877,
+          "memory_peak_bytes": 36712448,
+          "data_device_wbytes": 6627328
+        }
+      ],
+      "medians": {
+        "minivectordb:perf-r5c": {
+          "query_seconds": 2.174899700214155,
+          "filtered_seconds": 1.0288842001318699,
+          "unfiltered_seconds": 1.1460155000822851,
+          "memory_peak_bytes": 36823040,
+          "data_device_wbytes": 13811712
+        },
+        "minivectordb:vec-patch": {
+          "query_seconds": 2.091704800041043,
+          "filtered_seconds": 0.9846553000825224,
+          "unfiltered_seconds": 1.1070494999585208,
+          "memory_peak_bytes": 36712448,
+          "data_device_wbytes": 6627328
+        }
+      }
     }
   },
   "limitations": [
@@ -305,5 +385,5 @@
     "The test branch is not merged into the formal branch; the formal branch remains at 0791cba5c.",
     "io.stat device attribution and full writeback are not verified; these values are not official B or E."
   ],
-  "order_bias": "The paired driver runs the candidate image first in each round. Swapping the order for 600 values changed the direction (original 1.852 -> 1.907 s, swapped 1.907 -> 1.862 s), so end-to-end differences are order-sensitive; engine-level timings and io.stat counts are not."
+  "order_bias": "The paired driver runs the candidate image first in each round. Swapping the order changes the direction: 600 values original 1.852 -> 1.907 s vs swapped 1.907 -> 1.862 s; 5 values swapped 2.175 -> 2.092 s. End-to-end differences are order-sensitive; engine-level timings and io.stat counts are not."
 }
