@@ -30,6 +30,20 @@ def sync_directory(path):
             os.close(fd)
 
 
+def large_memory_limit():
+    """True when the cgroup allows an anonymous, rebuildable hash index."""
+    try:
+        text = Path('/sys/fs/cgroup/memory.max').read_text().strip()
+    except OSError:
+        return False
+    if text == 'max':
+        return True
+    try:
+        return int(text) >= 128 * 1024 * 1024
+    except ValueError:
+        return False
+
+
 def failpoint(name):
     if os.environ.get('MINIVECTORDB_FAILPOINT') == name:
         os._exit(86)
@@ -52,13 +66,20 @@ def hash_key(table, key):
 
 
 class DiskHash:
-    def __init__(self, path, capacity=1024):
-        self.path = Path(path)
+    def __init__(self, path, capacity=1024, anonymous=False):
+        self.anonymous = anonymous
+        self.path = None if anonymous else Path(path)
         self.capacity = capacity
         self.count = 0
-        self.file = open(self.path, 'w+b')
-        self.file.truncate(capacity * SLOT.size)
-        self.map = mmap.mmap(self.file.fileno(), 0)
+        if anonymous:
+            # Rebuildable index in anonymous memory: no file writes, and the WAL
+            # remains the only authoritative state.
+            self.file = None
+            self.map = mmap.mmap(-1, capacity * SLOT.size)
+        else:
+            self.file = open(self.path, 'w+b')
+            self.file.truncate(capacity * SLOT.size)
+            self.map = mmap.mmap(self.file.fileno(), 0)
         # Little-endian hosts can probe slots through a cast view, avoiding a
         # tuple per probe. Big-endian hosts keep the portable struct path.
         self.view = memoryview(self.map).cast('q') if sys.byteorder == 'little' else None
@@ -111,10 +132,17 @@ class DiskHash:
                 yield t, key, value
 
     def _grow(self):
-        replacement = DiskHash(str(self.path) + '.resize', self.capacity * 2)
+        replacement = DiskHash(None if self.anonymous else str(self.path) + '.resize',
+                               self.capacity * 2, anonymous=self.anonymous)
         for table, key, value in self.entries():
             replacement.put(table, key, value)
         self.close()
+        if self.anonymous:
+            # Take ownership of the replacement map instead of reopening a file.
+            self.map, self.view = replacement.map, replacement.view
+            replacement.map = replacement.view = None
+            self.capacity, self.count = replacement.capacity, replacement.count
+            return
         replacement.close()
         os.replace(replacement.path, self.path)
         self.capacity = replacement.capacity
@@ -127,8 +155,12 @@ class DiskHash:
         if self.view is not None:
             self.view.release()
             self.view = None
-        self.map.close()
-        self.file.close()
+        if self.map is not None:
+            self.map.close()
+            self.map = None
+        if self.file is not None:
+            self.file.close()
+            self.file = None
 
 
 def write_record(file, value):
@@ -176,7 +208,8 @@ class Storage:
         self.cache = OrderedDict()
         self.checkpoint_bytes = checkpoint_bytes
         self.live_bytes = 0
-        self.index = DiskHash(self.directory / 'primary.idx')
+        self.index_anonymous = large_memory_limit()
+        self.index = DiskHash(self.directory / 'primary.idx', anonymous=self.index_anonymous)
         wal_path = self.directory / 'database.wal'
         self.wal = open(wal_path, 'r+b' if wal_path.exists() else 'w+b', buffering=0)
         if os.fstat(self.wal.fileno()).st_size < len(MAGIC):
@@ -190,7 +223,11 @@ class Storage:
         for pattern in ('sort-*.tmp', 'modify-*.tmp'):
             for path in self.directory.glob(pattern):
                 path.unlink()
-        for name in ('transaction.stage', 'transaction.idx', 'transaction.idx.resize', 'primary.idx.resize', 'checkpoint.wal'):
+        leftovers = ['transaction.stage', 'transaction.idx', 'transaction.idx.resize',
+                     'primary.idx.resize', 'checkpoint.wal']
+        if self.index_anonymous:
+            leftovers.append('primary.idx')  # stale file from a file-backed run
+        for name in leftovers:
             (self.directory / name).unlink(missing_ok=True)
 
     def recover(self):
@@ -330,7 +367,7 @@ class Storage:
         failpoint('after_checkpoint_replace')
         self.wal = open(self.directory / 'database.wal', 'r+b', buffering=0)
         self.index.close()
-        self.index = DiskHash(self.directory / 'primary.idx')
+        self.index = DiskHash(self.directory / 'primary.idx', anonymous=self.index_anonymous)
         self.cache.clear()
         self.cache_bytes = self.live_bytes = 0
         self.schemas = {}
