@@ -94,6 +94,16 @@ class DiskHash:
         SLOT.pack_into(self.map, slot * SLOT.size, table, key, value)
         self.count += int(not t)
 
+    def replace(self, table, key, value):
+        """Write one slot and return the previous value, probing only once."""
+        slot, t, old = self._slot(table, key)
+        if not t and (self.count + 1) * 10 > self.capacity * 6:
+            self._grow()
+            slot, t, old = self._slot(table, key)
+        SLOT.pack_into(self.map, slot * SLOT.size, table, key, value)
+        self.count += int(not t)
+        return old if t else None
+
     def entries(self, table=None):
         for i in range(self.capacity):
             t, key, value = SLOT.unpack_from(self.map, i * SLOT.size)
@@ -223,15 +233,17 @@ class Storage:
             self.schemas[record[1]] = record[2]
         else:
             _, table, key, row = record
+            value = offset + 1 if row is not None else -(offset + 1)
             if index is self.index:
-                old = index.get(table, key)
+                old = index.replace(table, key, value)
                 if old is not None and old > 0:
                     self.wal.seek(old - 1)
                     self.live_bytes -= LENGTH.unpack(self.wal.read(LENGTH.size))[0] + LENGTH.size
                 if row is not None:
                     self.wal.seek(offset)
                     self.live_bytes += LENGTH.unpack(self.wal.read(LENGTH.size))[0] + LENGTH.size
-            index.put(table, key, offset + 1 if row is not None else -(offset + 1))
+            else:
+                index.put(table, key, value)
 
     def begin(self):
         if self.stage is not None:

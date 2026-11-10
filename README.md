@@ -57,7 +57,7 @@ docker run --rm -i -v minivectordb-data:/data minivectordb:dev
 
 Dockerfile 用固定 SHA256 digest 的 Python 3.11 Bookworm 镜像进行多阶段构建，编译阶段的 32 项 Debian 包版本记录在 `build-dependencies.lock`。源码编译得到自研 C++ 共享库；编译器和本地预编译文件不进入最终镜像，运行时无需联网。依赖版本下架时构建应失败，不能静默换版；正式允许的镜像和依赖范围仍待确认。
 
-当前版本 Windows 与 Linux 容器完整回归均为 109 项通过；官方检查器针对实际 Docker 入口的握手与 20 组公开用例通过，详见 [JSONL 验证记录](docs/official-jsonl-validation.json)。历史 v4 验证、旧版本的容器压力测试和测量分别见 [v4 验证与复盘](docs/public-v4-validation.md)、[容器验证](docs/docker-validation.md) 与 [优化记录](docs/r3-optimization.md)。这些结果不等于正式准入。
+当前版本 Windows 与 Linux 容器完整回归均为 115 项通过；官方检查器针对实际 Docker 入口的握手与 20 组公开用例通过，详见 [JSONL 验证记录](docs/official-jsonl-validation.json)。64 MiB 超内存压力测试通过，`oom_kill` 为 0。内核距离计算与高基数列值缓存的本地对照见 [过滤缓存优化记录](docs/jsonl-filter-optimization.md)。历史 v4 验证、旧版本的容器压力测试和测量分别见 [v4 验证与复盘](docs/public-v4-validation.md)、[容器验证](docs/docker-validation.md) 与 [优化记录](docs/r3-optimization.md)。这些结果不等于正式准入。
 
 ## 功能状态
 
@@ -109,7 +109,7 @@ Dockerfile 用固定 SHA256 digest 的 Python 3.11 Bookworm 镜像进行多阶�
 
 提交后，日志达到 `--checkpoint-mib`（默认 64 MiB）且超过有效行记录大小的三倍时，执行流式日志压缩。压缩写入已同步的临时 WAL，再原子替换，重建索引并清空旧位置缓存。压缩期间需要同时容纳旧日志和新快照，准备空间仍须对照正式磁盘限制。
 
-建向量索引时生成派生文件；重启时在 READY 前从提交数据重建。成功语句实际改变向量或记录集合时，清除对应表的快照和过滤缓存；只改变普通列时保留向量文件，清除依赖这些列的过滤缓存。失败语句、零行修改、相同值更新和只读事务保留有效快照。COMMIT 保留当前可见快照；ROLLBACK 按该事务实际修改的表和列失效，随后按恢复的可见状态重建。过滤缓存只保存候选位置，限制为排序预算的一半且不超过 1 MiB；向量本体通过磁盘映射读取，页缓存仍计入总体内存。
+建向量索引时生成派生文件；重启时在 READY 前从提交数据重建。成功语句实际改变向量或记录集合时，清除对应表的快照和过滤缓存；只改变普通列时保留向量文件，清除依赖这些列的过滤缓存。失败语句、零行修改、相同值更新和只读事务保留有效快照。COMMIT 保留当前可见快照；ROLLBACK 按该事务实际修改的表和列失效，随后按恢复的可见状态重建。过滤缓存保存候选位置，并可为单列等值过滤保留按快照顺序排列的列值列表；两者共用同一预算，限制为排序预算的一半且不超过 1 MiB，超限按 LRU 淘汰。向量本体通过磁盘映射读取，页缓存仍计入总体内存。
 
 原生路径处理单个 L2_DISTANCE 升序和有界 LIMIT。它保留 K+1 个候选、检查数值边界，并用 Python math.dist 复算返回记录；并列或过近的第 K／K+1 距离、过大的 K、超出过滤缓存预算、维度超过 65,536 或未编译内核时，使用通用精确执行器。这里的边界仅决定执行路径，不限制 SQL 功能范围。
 

@@ -94,8 +94,14 @@ class VectorIndexes:
                 pass  # Portable Python path remains fully functional.
         self.entries = {}
         self.filters = OrderedDict()
+        # Cached column values in snapshot order, keyed by (table id, column).
+        # One scan then answers any number of equality filters on that column,
+        # including cardinalities too large for the per-value position cache.
+        self.column_values = OrderedDict()
+        self.grouping_suppressed = set()
         self.filter_bytes = 0
         self.filter_budget = min(sort_memory // 2, 1024 * 1024)
+        self.max_groups = 4096
         self.max_keep = sort_memory // 512
         self.fallbacks = 0
         self.searches = 0
@@ -123,6 +129,16 @@ class VectorIndexes:
         self.invalidate_filters(table)
 
     def invalidate_filters(self, table=None, columns=None):
+        self.grouping_suppressed = {
+            key for key in self.grouping_suppressed
+            if not ((table is None or key[0] == table) and
+                    (columns is None or key[1] in columns))
+        }
+        for key in list(self.column_values):
+            if ((table is None or key[0] == table) and
+                    (columns is None or key[1] in columns)):
+                _, size = self.column_values.pop(key)
+                self.filter_bytes -= size
         for key in list(self.filters):
             if ((table is None or key[0] == table) and
                     (columns is None or any(condition[0] in columns for condition in key[1]))):
@@ -134,23 +150,110 @@ class VectorIndexes:
         if key in self.filters:
             self.filters.move_to_end(key)
             return self.filters[key][0]
-        selected = array('Q')
         overhead = 256 + sum(sys.getsizeof(c) + sum(sys.getsizeof(v) for v in c) for c in conditions)
+        if len(conditions) == 1 and conditions[0][1] == '=':
+            return self._equality_selection(schema, snapshot, conditions, key, overhead)
+        selected = array('Q')
         for position in range(snapshot.count):
             row = self.storage.get(schema['id'], snapshot.key(position))
             if matches(row, conditions):
                 selected.append(position)
                 if sys.getsizeof(selected) + overhead > self.filter_budget:
                     return False  # Large filters use the bounded streaming path.
-        size = sys.getsizeof(selected) + overhead
-        if size > self.filter_budget:
-            return False
-        while self.filters and self.filter_bytes + size > self.filter_budget:
-            _, (_, previous) = self.filters.popitem(last=False)
+        return self._store_selection(key, selected, overhead)
+
+    def _cache_values(self, cache_key, values, size):
+        if size <= self.filter_budget and self._make_room(size):
+            self.column_values[cache_key] = values, size
+            self.filter_bytes += size
+
+    def _make_room(self, size):
+        while self.filter_bytes + size > self.filter_budget:
+            if self.filters:
+                _, (_, previous) = self.filters.popitem(last=False)
+            elif self.column_values:
+                _, (_, previous) = self.column_values.popitem(last=False)
+            else:
+                return False
             self.filter_bytes -= previous
+        return True
+
+    def _store_selection(self, key, selected, overhead):
+        size = sys.getsizeof(selected) + overhead
+        if size > self.filter_budget or not self._make_room(size):
+            return False
         self.filters[key] = selected, size
         self.filter_bytes += size
         return selected
+
+    def _equality_selection(self, schema, snapshot, conditions, key, overhead):
+        column = conditions[0][0]
+        value = conditions[0][2]
+        cache_key = (schema['id'], column)
+        entry = self.column_values.get(cache_key)
+        if entry is not None:
+            self.column_values.move_to_end(cache_key)
+            selected = array('Q')
+            for position, current in enumerate(entry[0]):
+                if current == value:
+                    selected.append(position)
+                    if sys.getsizeof(selected) + overhead > self.filter_budget:
+                        return False  # Large filters use the bounded streaming path.
+            return self._store_selection(key, selected, overhead)
+        selected = array('Q')
+        # One scan can populate the position cache for every value of this
+        # column, and retain the column values so later scans of a suppressed
+        # (too many values) column stay cheap. Both buffers are bounded by the
+        # same budget, so a memory-constrained run never allocates more.
+        grouped = {} if cache_key not in self.grouping_suppressed else None
+        group_bytes = 0
+        values = []
+        value_bytes = sys.getsizeof(values)
+        for position in range(snapshot.count):
+            current = self.storage.get(schema['id'], snapshot.key(position))[column]
+            if current == value:
+                selected.append(position)
+                if sys.getsizeof(selected) + overhead > self.filter_budget:
+                    return False  # Large filters use the bounded streaming path.
+            if values is not None:
+                values.append(current)
+                value_bytes += 8 + sys.getsizeof(current)
+                if value_bytes > self.filter_budget:
+                    values = None
+            if grouped is None:
+                continue
+            positions = grouped.get(current)
+            if positions is None:
+                positions = array('Q')
+                grouped[current] = positions
+                group_bytes += 512 + sys.getsizeof(current) + sys.getsizeof(positions)
+            before = sys.getsizeof(positions)
+            positions.append(position)
+            group_bytes += sys.getsizeof(positions) - before
+            if len(grouped) > self.max_groups or group_bytes + overhead > self.filter_budget:
+                grouped = None
+                if len(self.grouping_suppressed) < 128:
+                    self.grouping_suppressed.add(cache_key)
+        stored_all = False
+        if grouped:
+            # Populate only entries that fit alongside existing cache entries.
+            # Earlier entries remain valid; standard invalidation uses column IDs.
+            stored_all = True
+            for current, positions in grouped.items():
+                group_key = (schema['id'], ((column, '=', current),))
+                if group_key == key or group_key in self.filters:
+                    continue
+                size = sys.getsizeof(positions) + 512 + sys.getsizeof(current)
+                if self.filter_bytes + size <= self.filter_budget:
+                    self.filters[group_key] = positions, size
+                    self.filter_bytes += size
+                else:
+                    stored_all = False
+        # The per-value cache covers every value when it was stored completely;
+        # otherwise keep the column scan for later equality queries.
+        if values is not None and (grouped is None or not stored_all):
+            self._cache_values(cache_key, values, value_bytes)
+        return self._store_selection(key, selected, overhead)
 
     def topk(self, schema, expression, conditions, limit, matches):
         if limit + 1 > self.max_keep:
@@ -182,7 +285,8 @@ class VectorIndexes:
             distance = math.dist(row[expression[1]], expression[2])
             verified.append((distance, row[schema['pk']], row))
         verified.sort(key=lambda item: (item[0], item[1]))
-        return [item[2] for item in verified[:limit]]
+        # Hand the exact distance back so the projection does not recompute it.
+        return [(item[2], item[0]) for item in verified[:limit]]
 
     def close(self):
         self.invalidate()

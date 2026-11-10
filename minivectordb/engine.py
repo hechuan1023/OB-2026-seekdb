@@ -326,8 +326,11 @@ class Engine:
                     and sort_keys[0][0][0] == 'distance'):
                 nearest = self.vector_indexes.topk(schema, sort_keys[0][0], conditions, limit, self.matches)
                 if nearest is not None:
-                    for row in nearest:
-                        yield tuple(self.evaluate(row, expr) for expr in expressions)
+                    distance_expression = sort_keys[0][0]
+                    for row, distance in nearest:
+                        # The kernel path already evaluated this exact distance.
+                        yield tuple(distance if expr == distance_expression else self.evaluate(row, expr)
+                                    for expr in expressions)
                     return
             candidates = self.candidates(schema, conditions)
             if not sort_keys:

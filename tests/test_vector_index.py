@@ -76,6 +76,105 @@ class NativeIndexTests(unittest.TestCase):
         self.db.execute("UPDATE t SET tag='gone' WHERE tag='g1'")
         self.assertEqual(self.compare_reference(sql), [])
 
+    def test_grouped_equality_cache_tracks_transactions(self):
+        query = lambda tag: "SELECT id FROM t WHERE tag='%s' ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 10" % tag
+        before = self.compare_reference(query('g2'))
+        self.db.vector_indexes.invalidate_filters()
+        self.compare_reference(query('g1'))
+        cache_key = (self.db.table('t')['id'], ((1, '=', 'g2'),))
+        self.assertIn(cache_key, self.db.vector_indexes.filters)
+        self.assertEqual(self.compare_reference(query('g2')), before)
+        self.db.execute('BEGIN')
+        self.db.execute("UPDATE t SET tag='g2' WHERE id=1")
+        self.compare_reference(query('g2'))
+        self.db.execute('ROLLBACK')
+        self.assertEqual(self.compare_reference(query('g2')), before)
+        self.db.execute('BEGIN')
+        self.db.execute("INSERT INTO t VALUES (200,'g2','[0,0,0,0]')")
+        self.assertEqual(self.compare_reference(query('g2'))[0], (200,))
+        self.db.execute('COMMIT')
+        after = self.compare_reference(query('g2'))
+        self.db.close()
+        self.db = Engine(self.temp.name)
+        self.assertEqual(self.compare_reference(query('g2')), after)
+        self.assertLessEqual(self.db.vector_indexes.filter_bytes, self.db.vector_indexes.filter_budget)
+
+    def test_grouping_high_cardinality_respects_budget(self):
+        self.db.execute('DELETE FROM t')
+        self.db.execute('INSERT INTO t VALUES ' + ','.join(
+            f"({i},'x{i}','[1,0,0,0]')" for i in range(180)))
+        self.db.vector_indexes.filter_budget = 4096
+        self.assertEqual(self.compare_reference("SELECT id FROM t WHERE tag='x99' ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 1"), [(99,)])
+        self.assertLessEqual(self.db.vector_indexes.filter_bytes, 4096)
+
+    def test_single_equality_and_multi_predicate_match_reference(self):
+        self.db.execute('CREATE TABLE n(id BIGINT PRIMARY KEY, bucket BIGINT, v VECTOR(2))')
+        self.db.execute("INSERT INTO n VALUES (1,-1,'[0,0]'),(2,2,'[1,0]'),(3,-1,'[2,0]')")
+        self.db.execute('CREATE VECTOR INDEX ni ON n(v)')
+        for where in ('bucket=-1', 'bucket=2', 'bucket=999', 'bucket=-1 AND id>1', 'bucket>=-1'):
+            sql = "SELECT id FROM n WHERE " + where + " ORDER BY L2_DISTANCE(v,'[0,0]') LIMIT 3"
+            self.compare_reference(sql)
+        self.assertEqual(self.query("SELECT id FROM n WHERE bucket=-1 ORDER BY L2_DISTANCE(v,'[0,0]') LIMIT 3"), [(1,), (3,)])
+
+    def test_suppressed_bigint_equality_matches_reference(self):
+        self.db.execute('CREATE TABLE n(id BIGINT PRIMARY KEY,bucket BIGINT,v VECTOR(2))')
+        self.db.execute('INSERT INTO n VALUES ' + ','.join(f"({i},{i},'[0,0]')" for i in range(600)))
+        self.db.execute('CREATE VECTOR INDEX ni ON n(v)')
+        template = "SELECT id FROM n WHERE bucket={} ORDER BY L2_DISTANCE(v,'[0,0]') LIMIT 2"
+        self.assertEqual(self.compare_reference(template.format(1000)), [])
+        # 600 values now fit the cached column scan, so grouping is not suppressed.
+        self.assertNotIn((self.db.table('n')['id'], 1), self.db.vector_indexes.grouping_suppressed)
+        self.assertEqual(self.compare_reference(template.format(599)), [(599,)])
+        # A budget smaller than the cached column forces the suppressed path.
+        self.db.vector_indexes.filter_budget = 2048
+        self.db.vector_indexes.invalidate_filters()
+        self.assertEqual(self.compare_reference(template.format(598)), [(598,)])
+        self.assertIn((self.db.table('n')['id'], 1), self.db.vector_indexes.grouping_suppressed)
+        self.assertEqual(self.compare_reference(template.format(597)), [(597,)])
+        self.assertLessEqual(self.db.vector_indexes.filter_bytes, 2048)
+
+    def test_grouped_cache_handles_hundreds_of_values_and_fallback(self):
+        self.db.execute('DELETE FROM t')
+        self.db.execute('INSERT INTO t VALUES ' + ','.join(
+            f"({i},'x{i}','[1,0,0,0]')" for i in range(400)))
+        sql = "SELECT id FROM t WHERE tag='x1' ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 1"
+        self.assertEqual(self.compare_reference(sql), [(1,)])
+        key = (self.db.table('t')['id'], ((1, '=', 'x399'),))
+        self.assertIn(key, self.db.vector_indexes.filters)
+        self.assertEqual(self.compare_reference(sql.replace('x1', 'x399')), [(399,)])
+        self.db.execute('INSERT INTO t VALUES ' + ','.join(
+            f"({i},'x{i}','[1,0,0,0]')" for i in range(400, 600)))
+        self.assertEqual(self.compare_reference(sql.replace('x1', 'x599')), [(599,)])
+        group_key = (self.db.table('t')['id'], 1)
+        # 600 values fit within the default budget, so grouping is not suppressed.
+        self.assertNotIn(group_key, self.db.vector_indexes.grouping_suppressed)
+        self.assertEqual(self.compare_reference(sql.replace('x1', 'x598')), [(598,)])
+        self.db.execute("UPDATE t SET tag='new' WHERE id=1")
+        self.assertNotIn(group_key, self.db.vector_indexes.grouping_suppressed)
+        self.assertEqual(self.compare_reference(sql.replace('x1', 'new')), [(1,)])
+        self.assertLessEqual(self.db.vector_indexes.filter_bytes, self.db.vector_indexes.filter_budget)
+        # A budget smaller than the cached column forces suppression, and the
+        # cached column scan must still answer every value exactly.
+        self.db.vector_indexes.filter_budget = 4096
+        self.db.vector_indexes.invalidate_filters()
+        self.assertEqual(self.compare_reference(sql.replace('x1', 'x597')), [(597,)])
+        self.assertIn(group_key, self.db.vector_indexes.grouping_suppressed)
+        self.assertEqual(self.compare_reference(sql.replace('x1', 'x596')), [(596,)])
+        self.assertLessEqual(self.db.vector_indexes.filter_bytes, 4096)
+
+    def test_column_scan_cache_serves_high_cardinality_equality(self):
+        self.db.execute('DELETE FROM t')
+        self.db.execute('INSERT INTO t VALUES ' + ','.join(
+            f"({i},'x{i}','[{i},0,0,0]')" for i in range(2000)))
+        sql = "SELECT id FROM t WHERE tag='{}' ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 2"
+        self.assertEqual(self.compare_reference(sql.format('x1999')), [(1999,)])
+        table = self.db.table('t')['id']
+        self.assertIn((table, 1), self.db.vector_indexes.grouping_suppressed)
+        self.assertIn((table, 1), self.db.vector_indexes.column_values)
+        for value in ('x0', 'x1000', 'x1998', 'missing'):
+            self.compare_reference(sql.format(value))
+        self.assertLessEqual(self.db.vector_indexes.filter_bytes, self.db.vector_indexes.filter_budget)
+
     def test_ties_use_reference_and_primary_key(self):
         self.db.execute("UPDATE t SET v='[1,0,0,0]'")
         rows = self.compare_reference("SELECT id FROM t ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 7")

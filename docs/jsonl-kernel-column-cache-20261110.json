@@ -1,0 +1,342 @@
+{
+  "scope": "Local JSONL correctness and wall-clock comparison; not the official benchmark.",
+  "date": "2026-11-10",
+  "images": {
+    "candidate": "sha256:e969b03742e19f09bde5e38ed26626d7f7c71f1f3849b411653df0e8722f06ee",
+    "previous_candidate": "sha256:a9667bc8aa33225842fe7b6cbe52630faff313e1ac0aca2900e56a9542868945"
+  },
+  "source_sha256": {
+    "minivectordb/vector_index.py": "f87bf17aaac4aea5ba69433de0eb143bb4ecfeb601e086037cef65116bc2bfc3",
+    "minivectordb/engine.py": "c42969ca30e9ece3fd66274d28ad4b78c37686c8260d97a67dbbd8a9998bc8c0",
+    "minivectordb/storage.py": "09f211fe0d2baa7e3703d2936bcbd08c5c2c9fbe029f4231b60971ca51235172",
+    "native/exact.cpp": "39966ded43443ae186a278c30727e148f7bceebf69128dbcbc08f956f779526b",
+    "tests/jsonl_benchmark.py": "96de03a2eda98ad50cb902608f71722528b51202dd0ecea8230027f882c561c9"
+  },
+  "seed": 20261110,
+  "rows": 10000,
+  "dimensions": 128,
+  "queries": 1000,
+  "k": 10,
+  "rounds_per_image": 3,
+  "method": "Two images alternate per round. Host prepares data, queries and independent math.dist truth; every query checks the full ID order and distance within 1e-12 relative/absolute tolerance. Each round uses a fresh Docker volume, --cpus=2 --memory=256m --memory-swap=256m, no network. cgroup memory.peak and raw io.stat are read after sync before shutdown; io.stat device attribution and full writeback are not verified, so these values are not official B or E.",
+  "scenarios": {
+    "5": {
+      "groups": 5,
+      "queries": 1000,
+      "images": [
+        "minivectordb:perf-r4b",
+        "minivectordb:group-fastfallback"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:perf-r4b",
+          "round": 1,
+          "write_seconds": 4.126731199998176,
+          "query_seconds": 2.9623582999774953,
+          "filtered_seconds": 1.4149891998240491,
+          "unfiltered_seconds": 1.5473691001534462,
+          "first_filter_seconds_sum": 0.03367119999893475,
+          "first_filter_seconds_first_tag": 0.02377379999961704,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36794368,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=274 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:group-fastfallback",
+          "round": 1,
+          "write_seconds": 4.193336700001964,
+          "query_seconds": 3.4563694000826217,
+          "filtered_seconds": 1.459284300042782,
+          "unfiltered_seconds": 1.9970851000398397,
+          "first_filter_seconds_sum": 0.033900499998708256,
+          "first_filter_seconds_first_tag": 0.021103899998706765,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36769792,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r4b",
+          "round": 2,
+          "write_seconds": 3.878088999990723,
+          "query_seconds": 2.972128299938049,
+          "filtered_seconds": 1.3960209000942996,
+          "unfiltered_seconds": 1.5761073998437496,
+          "first_filter_seconds_sum": 0.03362600000400562,
+          "first_filter_seconds_first_tag": 0.0239791000058176,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36847616,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:group-fastfallback",
+          "round": 2,
+          "write_seconds": 4.258476899995003,
+          "query_seconds": 3.5771423001715448,
+          "filtered_seconds": 1.5234268002095632,
+          "unfiltered_seconds": 2.0537154999619815,
+          "first_filter_seconds_sum": 0.03576519999478478,
+          "first_filter_seconds_first_tag": 0.02176770000369288,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36716544,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=273 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r4b",
+          "round": 3,
+          "write_seconds": 4.219297699994058,
+          "query_seconds": 2.865658000067924,
+          "filtered_seconds": 1.3469151000172133,
+          "unfiltered_seconds": 1.5187429000507109,
+          "first_filter_seconds_sum": 0.04258069999923464,
+          "first_filter_seconds_first_tag": 0.02955380000639707,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36843520,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=273 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:group-fastfallback",
+          "round": 3,
+          "write_seconds": 4.537810499998159,
+          "query_seconds": 3.482334500120487,
+          "filtered_seconds": 1.485985000123037,
+          "unfiltered_seconds": 1.99634949999745,
+          "first_filter_seconds_sum": 0.034528099989984185,
+          "first_filter_seconds_first_tag": 0.022383000003173947,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36741120,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=272 dbytes=0 dios=0"
+        }
+      ],
+      "medians": {
+        "minivectordb:perf-r4b": {
+          "write_seconds": 4.126731199998176,
+          "query_seconds": 2.9623582999774953,
+          "filtered_seconds": 1.3960209000942996,
+          "unfiltered_seconds": 1.5473691001534462,
+          "memory_peak_bytes": 36843520
+        },
+        "minivectordb:group-fastfallback": {
+          "write_seconds": 4.258476899995003,
+          "query_seconds": 3.482334500120487,
+          "filtered_seconds": 1.485985000123037,
+          "unfiltered_seconds": 1.9970851000398397,
+          "memory_peak_bytes": 36741120
+        }
+      }
+    },
+    "200": {
+      "groups": 200,
+      "queries": 1000,
+      "images": [
+        "minivectordb:perf-r4b",
+        "minivectordb:group-fastfallback"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:perf-r4b",
+          "round": 1,
+          "write_seconds": 3.891254600006505,
+          "query_seconds": 2.61815879974165,
+          "filtered_seconds": 1.1152362998545868,
+          "unfiltered_seconds": 1.5029224998870632,
+          "first_filter_seconds_sum": 0.46552369982236996,
+          "first_filter_seconds_first_tag": 0.021750100000645034,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36823040,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13819904 rios=0 wios=271 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:group-fastfallback",
+          "round": 1,
+          "write_seconds": 4.173374799996964,
+          "query_seconds": 3.385186000057729,
+          "filtered_seconds": 1.3460631001507863,
+          "unfiltered_seconds": 2.0391228999069426,
+          "first_filter_seconds_sum": 0.5213273001136258,
+          "first_filter_seconds_first_tag": 0.023695600000792183,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36757504,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13819904 rios=0 wios=271 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r4b",
+          "round": 2,
+          "write_seconds": 3.736653700005263,
+          "query_seconds": 2.036288000177592,
+          "filtered_seconds": 0.8924730001745047,
+          "unfiltered_seconds": 1.1438150000030873,
+          "first_filter_seconds_sum": 0.33040440002514515,
+          "first_filter_seconds_first_tag": 0.020298899995395914,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36810752,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13819904 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:group-fastfallback",
+          "round": 2,
+          "write_seconds": 4.362312099998235,
+          "query_seconds": 2.8659549999865703,
+          "filtered_seconds": 1.0955170000670478,
+          "unfiltered_seconds": 1.7704379999195226,
+          "first_filter_seconds_sum": 0.40776489990821574,
+          "first_filter_seconds_first_tag": 0.01887919999717269,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 37281792,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13819904 rios=0 wios=271 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r4b",
+          "round": 3,
+          "write_seconds": 3.796958300008555,
+          "query_seconds": 2.2164953999163117,
+          "filtered_seconds": 0.9934309000818757,
+          "unfiltered_seconds": 1.223064499834436,
+          "first_filter_seconds_sum": 0.43969420006033033,
+          "first_filter_seconds_first_tag": 0.021699899996747263,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36806656,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13819904 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:group-fastfallback",
+          "round": 3,
+          "write_seconds": 4.384757299994817,
+          "query_seconds": 2.7831526997033507,
+          "filtered_seconds": 1.0567191999580245,
+          "unfiltered_seconds": 1.7264334997453261,
+          "first_filter_seconds_sum": 0.4560077000060119,
+          "first_filter_seconds_first_tag": 0.023447700004908256,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36540416,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13819904 rios=0 wios=271 dbytes=0 dios=0"
+        }
+      ],
+      "medians": {
+        "minivectordb:perf-r4b": {
+          "write_seconds": 3.796958300008555,
+          "query_seconds": 2.2164953999163117,
+          "filtered_seconds": 0.9934309000818757,
+          "unfiltered_seconds": 1.223064499834436,
+          "memory_peak_bytes": 36810752
+        },
+        "minivectordb:group-fastfallback": {
+          "write_seconds": 4.362312099998235,
+          "query_seconds": 2.8659549999865703,
+          "filtered_seconds": 1.0955170000670478,
+          "unfiltered_seconds": 1.7704379999195226,
+          "memory_peak_bytes": 36757504
+        }
+      }
+    },
+    "600": {
+      "groups": 600,
+      "queries": 1000,
+      "images": [
+        "minivectordb:perf-r4b",
+        "minivectordb:group-fastfallback"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:perf-r4b",
+          "round": 1,
+          "write_seconds": 4.157442099996842,
+          "query_seconds": 2.879569399956381,
+          "filtered_seconds": 1.247301300012623,
+          "unfiltered_seconds": 1.632268099943758,
+          "first_filter_seconds_sum": 1.247301300012623,
+          "first_filter_seconds_first_tag": 0.023854500002926216,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 37064704,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:group-fastfallback",
+          "round": 1,
+          "write_seconds": 4.351383499990334,
+          "query_seconds": 10.441381600219756,
+          "filtered_seconds": 8.35725520021515,
+          "unfiltered_seconds": 2.0841264000046067,
+          "first_filter_seconds_sum": 8.35725520021515,
+          "first_filter_seconds_first_tag": 0.017630900008953176,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36909056,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r4b",
+          "round": 2,
+          "write_seconds": 4.2200240999954985,
+          "query_seconds": 2.671934799698647,
+          "filtered_seconds": 1.1451687997760018,
+          "unfiltered_seconds": 1.5267659999226453,
+          "first_filter_seconds_sum": 1.1451687997760018,
+          "first_filter_seconds_first_tag": 0.02378119999775663,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 37019648,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=273 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:group-fastfallback",
+          "round": 2,
+          "write_seconds": 4.020340900009614,
+          "query_seconds": 10.310852599592181,
+          "filtered_seconds": 8.248656299823779,
+          "unfiltered_seconds": 2.0621962997684022,
+          "first_filter_seconds_sum": 8.248656299823779,
+          "first_filter_seconds_first_tag": 0.01757470000302419,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36904960,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r4b",
+          "round": 3,
+          "write_seconds": 4.092467399997986,
+          "query_seconds": 2.5768683997157495,
+          "filtered_seconds": 1.0723838997801067,
+          "unfiltered_seconds": 1.5044844999356428,
+          "first_filter_seconds_sum": 1.0723838997801067,
+          "first_filter_seconds_first_tag": 0.021032900011050515,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 37036032,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=272 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:group-fastfallback",
+          "round": 3,
+          "write_seconds": 4.204406699995161,
+          "query_seconds": 10.5021111999813,
+          "filtered_seconds": 8.388440500028082,
+          "unfiltered_seconds": 2.113670699953218,
+          "first_filter_seconds_sum": 8.388440500028082,
+          "first_filter_seconds_first_tag": 0.016809699998702854,
+          "recall_exact": 1.0,
+          "memory_peak_bytes": 36904960,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=272 dbytes=0 dios=0"
+        }
+      ],
+      "medians": {
+        "minivectordb:perf-r4b": {
+          "write_seconds": 4.157442099996842,
+          "query_seconds": 2.671934799698647,
+          "filtered_seconds": 1.1451687997760018,
+          "unfiltered_seconds": 1.5267659999226453,
+          "memory_peak_bytes": 37036032
+        },
+        "minivectordb:group-fastfallback": {
+          "write_seconds": 4.204406699995161,
+          "query_seconds": 10.441381600219756,
+          "filtered_seconds": 8.35725520021515,
+          "unfiltered_seconds": 2.0841264000046067,
+          "memory_peak_bytes": 36904960
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Fixed seed and one data distribution per scenario; no cold-cache control.",
+    "Docker Desktop pipe round-trip adds roughly 1.5-2 ms per query on this host and dilutes engine-side gains.",
+    "The write_seconds recorded by the driver includes host-side SQL string construction (~1.2 s), so it is not the official write T.",
+    "Local results are not official admission, hidden-case results, or E."
+  ]
+}

@@ -29,14 +29,35 @@ static bool better(const Candidate &a, const Candidate &b) {
   return a.distance < b.distance || (a.distance == b.distance && a.key < b.key);
 }
 
+// Keep the reduction in its own non-inlined function: inlining it into the heap
+// loop measured about 2x slower because the compiler then failed to vectorize
+// the lane loop. Eight fixed lanes make the summation order independent of the
+// SIMD width, so the default and AVX2 clones stay bitwise identical under
+// -ffp-contract=off. Plain double accumulation is used instead of compensated
+// summation: its relative error for 128 dimensions is about 1e-14, far below the
+// 1e-12 relative boundary guard in vector_index.py, and it measured ~1.7x faster.
+static MV_TARGET_CLONES __attribute__((noinline)) double
+distance_squared(const float *__restrict v, const float *__restrict query,
+                 std::uint64_t dimensions) {
+  double acc[8] = {0.0};
+  std::uint64_t j = 0;
+  for (; j + 8 <= dimensions; j += 8) {
+    for (std::uint64_t lane = 0; lane < 8; ++lane) {
+      const double delta = static_cast<double>(v[j + lane]) - query[j + lane];
+      acc[lane] += delta * delta;
+    }
+  }
+  for (; j < dimensions; ++j) {
+    const double delta = static_cast<double>(v[j]) - query[j];
+    acc[j & 7] += delta * delta;
+  }
+  return acc[0] + acc[1] + acc[2] + acc[3] + acc[4] + acc[5] + acc[6] + acc[7];
+}
+
 MV_EXPORT int mv_abi_version() { return 1; }
 
 // Retain K+1 candidates. Python verifies a conservative boundary gap, re-evaluates
 // selected distances with math.dist, and falls back on ambiguous boundaries.
-// Eight independent compensated chains: lane j uses (j & 7), and the lanes are
-// combined in a fixed order, so the result is bitwise identical regardless of
-// which SIMD width the compiler picks for the per-lane inner loops. More lanes
-// shorten the loop-carried dependency that prevents wide vectorization.
 MV_EXPORT MV_TARGET_CLONES std::int64_t mv_topk(
     const float *__restrict vectors, const std::int64_t *__restrict keys,
     std::uint64_t rows, std::uint64_t dimensions,
@@ -54,38 +75,11 @@ MV_EXPORT MV_TARGET_CLONES std::int64_t mv_topk(
     for (std::uint64_t n = 0; n < count; ++n) {
       const std::uint64_t row = selection ? selection[n] : n;
       if (row >= rows) return -1;
-      const float *v = vectors + row * dimensions;
-      double acc[8] = {0.0};
-      double cor[8] = {0.0};
-      std::uint64_t j = 0;
-      for (; j + 8 <= dimensions; j += 8) {
-        for (std::uint64_t lane = 0; lane < 8; ++lane) {
-          const double delta = static_cast<double>(v[j + lane]) - query[j + lane];
-          const double term = delta * delta - cor[lane];
-          const double next = acc[lane] + term;
-          cor[lane] = (next - acc[lane]) - term;
-          acc[lane] = next;
-        }
-      }
-      for (; j < dimensions; ++j) {
-        const std::uint64_t lane = j & 7;
-        const double delta = static_cast<double>(v[j]) - query[j];
-        const double term = delta * delta - cor[lane];
-        const double next = acc[lane] + term;
-        cor[lane] = (next - acc[lane]) - term;
-        acc[lane] = next;
-      }
-      double sum = 0.0, correction = 0.0;
-      for (std::uint64_t lane = 0; lane < 8; ++lane) {
-        const double term = acc[lane] - correction;
-        const double next = sum + term;
-        correction = (next - sum) - term;
-        sum = next;
-      }
       // Squared distance: monotone in the true distance, so ordering and ties
       // are unchanged. Python re-evaluates the selected rows with math.dist and
       // its boundary guard only needs a monotone key.
-      const Candidate item{sum, keys[row], row};
+      const Candidate item{distance_squared(vectors + row * dimensions, query, dimensions),
+                           keys[row], row};
       if (heap.size() < keep) {
         heap.push_back(item);
         std::push_heap(heap.begin(), heap.end(), better);

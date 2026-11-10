@@ -1,0 +1,67 @@
+{
+  "image": "minivectordb:jsonl",
+  "seed": 20261110,
+  "rows": 10000,
+  "dimensions": 128,
+  "queries": 200,
+  "rounds": [
+    {
+      "round": 1,
+      "write_seconds": 4.570714500005124,
+      "query_seconds": 0.6543982998409774,
+      "filtered_seconds": 0.320917099918006,
+      "unfiltered_seconds": 0.3334811999229714,
+      "first_filter_seconds": {
+        "g1": 0.014932599995518103,
+        "g3": 0.015099299998837523,
+        "g0": 0.015517899999395013,
+        "g2": 0.01794750000408385,
+        "g4": 0.018880200004787184
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36904960,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=272 dbytes=0 dios=0"
+    },
+    {
+      "round": 2,
+      "write_seconds": 4.319929999997839,
+      "query_seconds": 0.6885546998673817,
+      "filtered_seconds": 0.352930099965306,
+      "unfiltered_seconds": 0.3356245999020757,
+      "first_filter_seconds": {
+        "g1": 0.016543200006708503,
+        "g3": 0.01719089999096468,
+        "g0": 0.018609699996886775,
+        "g2": 0.018028100006631576,
+        "g4": 0.015081799996551126
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36659200,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=272 dbytes=0 dios=0"
+    },
+    {
+      "round": 3,
+      "write_seconds": 4.309247199998936,
+      "query_seconds": 0.6540932000352768,
+      "filtered_seconds": 0.3263393999222899,
+      "unfiltered_seconds": 0.32775380011298694,
+      "first_filter_seconds": {
+        "g1": 0.01525969999784138,
+        "g3": 0.015017900004750118,
+        "g0": 0.015089199994690716,
+        "g2": 0.01544339999963995,
+        "g4": 0.01818739999725949
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36716544,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=272 dbytes=0 dios=0"
+    }
+  ],
+  "notes": "Local JSONL correctness and wall-clock comparison; not official benchmark. Queries and truth prepared on host, data volumes independent, no cold-cache control. cgroup metrics read after sync before shutdown, exec helper included; io.stat is raw, no device attribution verified.",
+  "image_id": "sha256:5ca5b30d6784232b12899dbc30d49338b282d23bd3f63669fc517a22957824f5",
+  "source_version": "4f5a5d576c9cf53664d88f7ca4b8226a61e1f99b",
+  "source_sha256": {
+    "minivectordb/vector_index.py": "2ca294a08fd2aaf9640756089c7338196fce687264c50d8ee4c669737b64d55b",
+    "tests/jsonl_benchmark.py": "2c9bfd319a71768adbb212a15151fb96a95028d80753b3d84ddfb8420d8c6878"
+  }
+}
