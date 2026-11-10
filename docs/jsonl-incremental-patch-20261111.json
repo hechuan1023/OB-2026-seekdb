@@ -41,7 +41,8 @@
     "P6 transaction matrix 41/41",
     "P7 112/112",
     "P8 malformed 170/170",
-    "P9 protocol streams 33/33"
+    "P9 protocol streams 33/33",
+    "container lifecycle: SIGKILL/EOF/SIGTERM checks passed, no OOM"
   ],
   "limitations": [
     "Fixed single run per image for the update/delete cycles; the delete difference is within noise.",
