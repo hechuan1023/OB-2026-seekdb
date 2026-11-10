@@ -372,12 +372,9 @@ def main():
         finally:
             probe.close()
         stale = list(directory.glob('flat-*.vec')) + list(directory.glob('flat-*.keys'))
-        check('重建 强杀后派生文件存在', len(stale) >= 2, [p.name for p in stale])
-        removed = 0
-        for path in stale:
-            path.unlink()
-            removed += 1
-        check('重建 删除派生索引文件', removed >= 2, removed)
+        # Small datasets keep the derived snapshot in memory; the index is still
+        # rebuilt from committed rows on every start.
+        check('重建 小数据集使用内存快照，不写派生文件', not stale, [p.name for p in stale])
         with Pipe(directory) as pipe:
             after = topk(pipe, '[0,0]', 3)
             check('重建 重启后索引从已提交数据重建，结果一致', after == baseline, (after, baseline))
@@ -394,14 +391,14 @@ def main():
             pipe.execute('BEGIN')
             pipe.execute("UPDATE t SET v='[4,4]' WHERE id = 1")
             pipe.execute('ROLLBACK')
-            topk(pipe, '[0,0]', 2)  # 回滚会失效快照；再查询一次以重建派生文件
+            topk(pipe, '[0,0]', 2)  # 回滚会失效快照；再查询一次以重建快照
             leftovers = [p.name for p in directory.iterdir()
                          if p.name.endswith('.tmp') or p.name.startswith('transaction.')
                          or p.name == 'checkpoint.wal']
             check('目录 无临时/事务残留文件', leftovers == [], leftovers)
             check('目录 权威日志存在', (directory / 'database.wal').exists())
-            check('目录 派生索引文件位于数据目录（运行期）',
-                  len(list(directory.glob('flat-*'))) >= 2)
+            check('目录 小数据集派生索引驻留内存，不写外部文件',
+                  not list(directory.glob('flat-*')))
     finally:
         temp.cleanup()
 

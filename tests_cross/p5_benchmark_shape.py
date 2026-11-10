@@ -266,27 +266,23 @@ def main():
                     tx7_failures.append((tag, len(plain_ids), len(top_ids)))
             check('P5e1 TX-07 五组过滤集合：普通查询 == TopK(K≥N)', not tx7_failures, tx7_failures)
 
-        # ---------- 4.1：派生索引可重建（强杀留下 flat-* → 删除 → 重启）----------
-        # 正常关闭会删除派生文件（设计为可丢弃）；强杀才能保留它们。
+        # ---------- 4.1：派生索引可重建 ----------
+        # 5,000 x 128 floats stay below the 8 MiB in-memory snapshot limit, so the
+        # derived files are intentionally not created; the index is still rebuilt
+        # from committed rows on every start. The mapped-file path is covered by
+        # tests/test_vector_index.py::test_mapped_vectors_exceed_python_allocation_budget.
         with Pipe(directory) as pipe:
             validate_queries(pipe, rows, queries[:1], 'prepare', [])
             pipe.process.kill()
             pipe.process.wait(timeout=60)
             pipe.close()
         stale = list(directory.glob('flat-*.vec')) + list(directory.glob('flat-*.keys'))
-        check('P5f1 强杀后派生索引文件存在', len(stale) >= 2, [p.name for p in stale])
-        removed = 0
-        for path in stale:
-            path.unlink()
-            removed += 1
-        check('P5f2 删除派生索引文件', removed >= 2, removed)
+        check('P5f1 小数据集使用内存快照，不写派生文件', not stale, [p.name for p in stale])
         with Pipe(directory) as pipe:
             failures = []
             filtered, unfiltered = validate_queries(pipe, rows, queries[:20], 'rebuild', failures)
-            check('P5f3 重启后从已提交数据重建索引，查询正确',
+            check('P5f2 重启后从已提交数据重建索引，查询正确',
                   not failures and all(r == 1.0 for r in filtered + unfiltered), failures[:5])
-            check('P5f4 重建后 flat 文件重新生成',
-                  len(list(directory.glob('flat-*.vec'))) >= 1)
     finally:
         temp.cleanup()
 
