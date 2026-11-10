@@ -81,6 +81,19 @@ class Client:
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_deep_invalid_vector_does_not_abort_transaction(self):
+        with self.client() as client:
+            self.assertEqual(client.execute('CREATE TABLE v(id BIGINT PRIMARY KEY, x VECTOR(2))'), 'OK\t0')
+            self.assertEqual(client.execute('BEGIN'), 'OK\t0')
+            self.assertEqual(client.execute('UPDATE t SET value=99 WHERE id=1'), 'OK\t1')
+            nested = '[' * 1200 + '0' + ']' * 1200
+            reply = client.execute("INSERT INTO v VALUES (1,'[0," + nested + "]')")
+            self.assertTrue(reply.startswith('ERROR\tINVALID_VECTOR\t'), reply)
+            self.assertEqual(client.execute('SELECT value FROM t WHERE id=1'), [['99']])
+            self.assertEqual(client.execute('COMMIT'), 'OK\t0')
+        with self.client() as restarted:
+            self.assertEqual(restarted.execute('SELECT value FROM t WHERE id=1'), [['99']])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.directory = Path(self.temp.name)

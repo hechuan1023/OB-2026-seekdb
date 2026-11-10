@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- |
 | 官方公开题包 | `mysqltest/` | 组织方（`9f6df2ba` 原样合入） | 20 组 / 95 条 SQL | 断言权威；不得修改来迁就实现 |
 | 仓库自测套件 | `tests/` | 原开发 Agent | 106 项 | 引擎/索引/恢复/题包适配的 unittest |
-| 独立交叉验证组 | `tests_cross/` | 交叉验证 Agent（未参与开发） | 8 组，约 1,450 次验证动作 | 自带管道客户端，真值独立建立 |
+| 独立交叉验证组 | `tests_cross/` | 交叉验证 Agent（未参与开发） | 11 组，约 1,768 次验证动作 | 自带管道客户端，真值独立建立 |
 
 正式准入共 29 个用例：公开 20 个之外另有 9 个隐藏（输入与预期由组织方保留）。公开样例通过不等于正式准入。
 
@@ -65,7 +65,7 @@ docker run --rm --network none --cpus=2 --memory=256m --memory-swap=256m \
 
 `python -m unittest discover -v`；无第三方依赖；原生内核缺失时自动跳过原生路径（跳过不能记为原生通过）。构成：引擎与 SQL 语义（`test_engine.py`）、向量索引与生命周期（`test_vector_index.py`、`test_index_lifecycle.py`）、恢复与协议（`test_recovery.py`，含提交中断、逐字节 WAL 尾部、恢复中再终止、checkpoint 替换前后终止）、题包适配与防误判（`test_public_cases.py`、`test_public_adapter.py`）、内存探针（`test_memory.py`）。另有容器级驱动：`docker_validation.py`（真实入口 SIGKILL/EOF/SIGTERM/同卷）、`container_vector_pressure.py`（18,000×1024 维 / 64 MiB）、`container_benchmark.py`（三轮 T/B/M 形状测量）。
 
-## 4. 独立交叉验证组（tests_cross/，八组）
+## 4. 独立交叉验证组（tests_cross/，十一组）
 
 均为自带最小管道客户端，不 import 被测仓库的测试工具；真值独立建立（float32 用 `struct.pack/unpack('f')`，距离用 Python `math.dist`，排序键 `(distance, primary_key)`），不复用被测实现的距离、过滤或排序函数。
 
@@ -144,7 +144,44 @@ docker run --rm --network none --cpus=2 --memory=256m --memory-swap=256m \
 - **派生索引重建 4.1**：强杀保留 `flat-*` → 删除 → 重启，TopK 与基线一致。
 - **数据目录收敛**：无 `sort-*.tmp`/`modify-*.tmp`/`transaction.*`/`checkpoint.wal` 残留；权威 WAL 与派生索引均在数据目录内。
 
-### 4.9 驱动误判审计（内联，8 项注入检查）
+### 4.9 p7_spec_conformance.py — 规格一致性黑盒测试（112 项，host + 容器各一遍）
+
+**预期只从官方要求推导**（`docs/minivectordb-requirements.md`），不参考实现内部行为，不使用实现自带 failpoint；错误断言只要求"返回错误且状态不变"，不绑定本地错误码。
+
+- **S1 结果集语义**：未指定 ORDER BY 按集合比较；`SELECT *` 列序为定义序；投影与过滤集合正确。
+- **S2 过滤 TopK 对抗**：全表最近记录被 WHERE 排除后仍取过滤集合内最近 K；过滤集合内并列按主键升序；空集合返回空；K 超候选返回全部。
+- **S3 并列与排序**：50 行等距向量乱序插入，TopK 取主键最小的 10 个；普通 ORDER BY 并列按主键升序；DESC 并列仍按主键升序。
+- **S4 类型与向量**：VARCHAR 按码点计长（4 汉字接受 / 5 拒绝）、码点比较与排序；BIGINT ±2^63 边界与前导零；float32 舍入后等距并列（16777217 与 16777216）、距离按存储值计算；7 种非法向量拒绝且无残留。
+- **S5 事务**：自动提交三操作强杀保留；事务内普通与向量读自身修改；ROLLBACK 双恢复；多行插入失败无残留且可提交；**多行 UPDATE 值超长整条无部分修改**。
+- **S6 崩溃恢复**：确认提交后强杀（内容/过滤/向量三方面核对）；未提交强杀完整回滚；自动提交确认后保留；**恢复途中黑盒强杀**（50,000 行 WAL，按实测恢复时间 1/3 延迟强杀，两次均命中 READY 之前）。
+- **S7 协议**：100 条语句同 PID；stdout 仅协议内容；stderr 为空；响应 <2s；错误后可用；EOF 退出 0 且回滚未提交事务。
+- **S8 官方 benchmark 完整形状**：10,000 行 × 128 维、每批 100 条提交、1,000 查询、K=10、一半过滤；逐条校验 ID/去重/过滤/距离；两组平均 Recall@10 分别 ≥0.95（实测 1.0/1.0）；重启后数据与检索正确。
+
+### 4.10 p8_malformed.py — 畸形输入与鲁棒性（170 项，host + 容器各一遍）
+
+纯本地黑盒，预期从官方要求推导：非法输入必须报错且无残留、进程继续服务；合法极端输入必须正确接受。同时回归两个已修复缺陷。
+
+- **R1 缺陷回归**：VARCHAR 超长谓词（`=`/`<`/UPDATE/DELETE 均成功且空集，插入仍拒绝）；深嵌套向量 500/1000/2000 层、事务内、多行语句内全部报错且进程存活、无残留。
+- **R2 畸形向量全谱**：23 种（尾逗号、前导零、裸点、`+`、`null`、对象、布尔、嵌套、NaN/Infinity、溢出、空数组、维度不符、引号包裹、未闭合、空串等）全部报错且无残留。
+- **R3 极端数值**：BIGINT 千位整数拒绝、`+5`/`-0` 接受、巨大 LIMIT 返回全部；float32 次正规（`1e-45`→1.4e-45）、`5e-324` 下溢为 0、`-0.0`、`1e309`/`1e400` 拒绝。
+- **R4 字符串鲁棒性**：NUL、Tab、换行、回车、反斜杠、引号、分号、注释符、反引号、表情、组合字符共 13 种往返一致（按协议转义反解）；万字符谓词成功空集；反引号中文表名；100+ 字符长标识符。
+- **R5 批量与事务压力**：1000 行单语句末尾重复主键整条失败无残留、重试成功；100 条语句事务（50 插入+25 更新+25 删除）回滚与提交；20 表重启全部正确。
+- **R6 连续错误恢复**：500 条错误语句后进程存活、仍可写入、stderr 为空。
+
+### 4.11 p9_protocol_streams.py — 协议与输入分片鲁棒性（33 项，host + 容器各一遍）
+
+官方驱动未公布，本组按赛题 5.2 的协议要求验证传输层边界：
+
+- **T1 语句分片**：一条语句分三次写入、分号单独写入、跨行分片，均正确解析。
+- **T2 一次写入多条语句**：三个响应按序返回。
+- **T3 超长单条语句**：5,000 行 INSERT（57,802 字节）成功；1MB 注释行后语句正常（纯注释行本身无响应）。
+- **T4 流水线**：连续写入 200 条语句后再读响应，无死锁、顺序正确、数据完整。
+- **T5 混合错误流水线**：100 条成功/错误交错，响应数、成功/错误计数、生效行数全部正确，进程存活。
+- **T6 语句中间 EOF**：正常退出（exit=0）、无 stderr、重启后数据无损坏。
+- **T7 事务中终止进程**：Linux SIGTERM / Windows TerminateProcess 后重启，未提交事务回滚。
+- **T8 快速重启循环**：10 次重启写入/读取，数据逐次一致。
+
+### 4.12 驱动误判审计（内联，8 项注入检查）
 
 对 `tests/test_public_cases.py` 的断言路径注入错误响应：成功不得充当预期错误、错误码精确匹配、未映射语义拒绝、unordered 多重集合不丢重复行、列名/行内容/1e-5 容差均会正确失败。另对 20 组逐组审计 `{}`/`error`/`unordered`/浮点断言分布与 README 声明一致。
 
@@ -163,6 +200,9 @@ python -X utf8 tests_cross/p3_random_model.py 301 302 303 304 305 306 307
 python -X utf8 tests_cross/p4_edges.py                         # 103
 python -X utf8 tests_cross/p5_benchmark_shape.py               # 19（5,000×128 维）
 python -X utf8 tests_cross/p6_transaction_matrix.py            # 42
+python -X utf8 tests_cross/p7_spec_conformance.py              # 112（含 10,000×128 完整形状）
+python -X utf8 tests_cross/p8_malformed.py                     # 170（畸形输入与鲁棒性）
+python -X utf8 tests_cross/p9_protocol_streams.py              # 33（协议与输入分片）
 
 # Linux 容器（镜像内实现；tests/tests_cross/mysqltest 只读挂载）
 docker run --rm --network none --cpus=2 --memory=256m --memory-swap=256m \
@@ -196,14 +236,19 @@ docker run --rm --network none --cpus=2 --memory=64m --memory-swap=64m \
 | p4_edges | 103 | 101 |
 | p5_benchmark_shape | 19 | 753 |
 | p6_transaction_matrix | 42 | 162 |
-| **独立组小计** | **1,453** | **3,673** |
-| **合计（不含双路径重复）** | — | **约 7,575** |
+| p7_spec_conformance | 112 | 1,349 |
+| p8_malformed | 170 | 727 |
+| p9_protocol_streams | 33 | 385 |
+| **独立组小计** | **1,768** | **6,134** |
+| **合计（不含双路径重复）** | — | **约 10,036** |
 
 说明：官方 95 条为权威计数（manifest 声明并经脚本逐文件核对）；套件与独立组为实测值，因随机种子与循环生成而每次运行略有差异。p0/p1 的语句数较少是因为其检查以"重启后核对"为主，一条语句配多次状态验证。
 
 ## 7. 官方要求 → 测试覆盖对照
 
 依据官方赛题页（2026-11-10 核对，见 `docs/minivectordb-requirements.md` 顶部注记）。状态：✅ 已覆盖并有通过记录；◐ 本地可验证部分已覆盖，正式部分待题包；✗ 未完成；— 不适用。
+
+P7 组是纯规格推导的独立复核：其预期不参考实现行为，覆盖 S1–S8（结果集语义、过滤 TopK、并列排序、类型与向量、事务、崩溃恢复、协议、官方 benchmark 完整形状），与下表各条相互印证。
 
 ### 7.1 功能范围（必须支持）
 

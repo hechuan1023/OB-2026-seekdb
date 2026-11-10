@@ -124,8 +124,9 @@ class DiskHash:
 def write_record(file, value):
     data = pickle.dumps(value, protocol=5)
     position = file.tell()
-    write_all(file, LENGTH.pack(len(data)))
-    write_all(file, data)
+    # One write for length+payload halves the syscall count per record; the
+    # on-disk bytes are identical to the previous two-write form.
+    write_all(file, LENGTH.pack(len(data)) + data)
     return position
 
 

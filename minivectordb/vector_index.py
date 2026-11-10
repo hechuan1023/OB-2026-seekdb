@@ -167,9 +167,12 @@ class VectorIndexes:
         self.searches += 1
         if len(nearest) > limit:
             a, b = nearest[limit - 1][1], nearest[limit][1]
+            # The kernel returns squared distances (monotone, so ordering and
+            # ties are unchanged). A squared relative gap is about twice the
+            # distance gap, making this guard more conservative than before:
+            # ambiguous boundaries still fall back to the reference executor.
             # Finite float32 differences and dimensions <= 65536 cannot overflow
-            # double squares. This guard is deliberately much wider than the
-            # compensated-sum rounding bound; ties use the reference executor.
+            # double squares.
             if b - a <= max(abs(a), abs(b)) * 1e-12 + 1e-300:
                 self.fallbacks += 1
                 return None

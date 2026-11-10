@@ -8,14 +8,14 @@
     "minivectordb/__init__.py": "813ab12de56c56e9a2964ebba4b5cf8a0af254a7c3e37e8843093ae05c3f8c13",
     "minivectordb/__main__.py": "228e78f83a61fa31adbe70a1b7986824f74741c41f645245ce185c660c84d75c",
     "minivectordb/build_native.py": "413fa35724165f877a97ea15c3d67e4faf31ef54f25864c17a3a9910f0579a72",
-    "minivectordb/engine.py": "246aaead0ec0b92eab096056065e90a501547a171f8b6875dc71bedf12b92657",
+    "minivectordb/engine.py": "b52081cbab4e0327e04f89844f8d390608ff172b37d4fd49baab5894597f022c",
     "minivectordb/errors.py": "d65edb6fb0d6cecc232b0bc57ef4505fdaa6a005c3f544c6e0557094872310d3",
     "minivectordb/protocol.py": "58431431e9228869bea4e3a24179a063fe35e975efd56514b130ab181d131d5a",
     "minivectordb/sorting.py": "ba9fac1e55d1e346d1e5cd57848b8e8b967386fd12ea94159525ace58d78967d",
-    "minivectordb/sql.py": "4a2c18b9b533016cfdbb9dbf4a3a1b9d7164d3650540e87f60506b5ed8dd66b6",
-    "minivectordb/storage.py": "213749a1cd5889f50e64282fc137422db4e2b0d7ca63dcc5501b85f581e2eb15",
-    "minivectordb/vector_index.py": "81d79b76ab25a2c419cdff6e68d54fc63979b26ce8554dfc7e1c6588a021de8a",
-    "native/exact.cpp": "0e156546df587b8b7efebf774d1cf8df772460ba42554d7f15a2854c23cf47fa",
+    "minivectordb/sql.py": "530994031657abe8dc064765fcdc407cb294f448e41c6d213a69627f9236e6fb",
+    "minivectordb/storage.py": "61392cbdb1a95d83ff9556c2177e9b1de8382d4f05657325ddc33ff23b8f25d9",
+    "minivectordb/vector_index.py": "2ca294a08fd2aaf9640756089c7338196fce687264c50d8ee4c669737b64d55b",
+    "native/exact.cpp": "34179e4e68d5c69800fc00c69e64afe2fa0250b592596e5d1dcdefb62c714851",
     "pyproject.toml": "b13ae7a42e05d3505490d713cdd9ce20cbb215ec3dafe6bfa38e9605f0a5387d",
     "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tests/benchmark.py": "097cf7f7a8f1138352624e81de8543a37a88a5801cb60676945b41e1e6760693",
@@ -25,18 +25,31 @@
     "tests/docker_validation.py": "50af8de7ffec16b110d7ae0a112fffa5a0ed2ba1c6ad545036ded1e070e31351",
     "tests/measure_entry.py": "766ea4aef39765f461e02cc3ffc9a0a45be64de55d90ff500843d128389f4405",
     "tests/run_public_cases.py": "d1ab1a28941594eb11b980e09002cbe0d99623344e23c91da027f1da8a16f0df",
-    "tests/test_engine.py": "0ad2f45546dc46bfc63b1c4ccfa5f89ec06d948f87659a2474ea9ba8cfeced8a",
+    "tests/test_engine.py": "f193a2ddda0d74063f8f1e9a9dea2285ebbe247a5d921ad7fa9b9f6266d85ca0",
     "tests/test_index_lifecycle.py": "cb8a211bd58f71cf719ee1bb0b57e92d18a4c7e71d5f3a3addf4260a9e34e9fc",
     "tests/test_memory.py": "41c816642906a6bdbf80e36377455019e85bd1b5a19a01cc40be24549bff3959",
     "tests/test_public_adapter.py": "63f38d455aee507b8f7c24ee6de70e269fd6ddc7778f6fe02c9b7d930b2e82d8",
     "tests/test_public_cases.py": "020ee06dde89adc48db46f8a8fa1cd72b6dce41bffb08383a72b35345361c0fe",
-    "tests/test_recovery.py": "279824ed10b8bc34f5bd00ad11908f1abb93a7cf2b4b6e400438562578410168",
+    "tests/test_recovery.py": "3022811e9c6b4941ccce44ed25eec027486ba5b5d640dd07ebf516ad6bdd4d21",
     "tests/test_vector_index.py": "1fb266d2342874ffc8d258b6a4bdd76e0080e4b12192791122faa49ef5bcdbcd",
-    "tests/validate_submission.py": "b65449d32f80a36ae1b728c5401e9be66a4968480cf96ad6defc9a87a8a1638d"
+    "tests/validate_submission.py": "b65449d32f80a36ae1b728c5401e9be66a4968480cf96ad6defc9a87a8a1638d",
+    "tests_cross/p0_transaction_kill.py": "62016593baa1b6aa486f30801e187785e4bd2139f835df083714bc5c70ef0c9b",
+    "tests_cross/p0_vector_modes.py": "9dc9751848b95aa3b8104ebd0b0b794ac4792998c1603176b0bdc4e97ef8628b",
+    "tests_cross/p1_recovery_timing.py": "0353c952aa97f205d2ccfc8433bd2feb2c39baa52b8ff6369afa9929df410fef",
+    "tests_cross/p2_sql_surface.py": "581f285df791b1200d6a5dcd9b863ac68d35c96a36617acc94412f6bc66b8718",
+    "tests_cross/p3_random_model.py": "62c6a7bc820c4227418da15c163017af1d9c74889b8387289701ca4eb229beff",
+    "tests_cross/p4_edges.py": "6efe04db19b6da5d7021070912e3dbe1df88adde7f4a6ed58db2e90dd911f492",
+    "tests_cross/p5_benchmark_shape.py": "4737bb83acc1907314d51e31db797b6ac6006642c08d56d3a266434db2687bc9",
+    "tests_cross/p6_transaction_matrix.py": "d312e668903b99cd9a71f8d1e046d67f897eb8e9a9ceb6ebd181e066fbd8ba9a",
+    "tests_cross/p7_spec_conformance.py": "dabd1a2e08243c675f8d3b2aab4b41055e52d3bb657b95c6b66f45e845a2e559",
+    "tests_cross/p8_malformed.py": "94efade0f2bf5f980eb3cee33080dcd4272c9d0d44468bb534cecaa86fb8f99d",
+    "tests_cross/p9_protocol_streams.py": "d191ad02597898694826a6bad6a4a75e99d30e7851776989c96dec6e8811cdf5",
+    "tests_cross/profile_query.py": "ab7bc96131bded27e3f052e08b1b3bb3a5e6e8a14ef740cc62b0d363471cdcf3",
+    "tests_cross/profile_write.py": "dadce467ccf2cec8fe9bd82f30d86f0c77d18039bfaa0bcc466e91280461f541"
   },
   "verified_reports": [],
   "initial_base_commit": "c842a368c3394748d0499386c18f6b465242e141",
-  "development_parent_commit": "5d78f92a21418340a95331e8ae3eed6439bd0da5",
+  "development_parent_commit": "83d1ae0d2208a04fa281dfcbeb3aa7c763d4b2a7",
   "historical_reports": [
     {
       "path": "docs/r2-final-1.json",
@@ -69,11 +82,16 @@
     {
       "path": "docs/r3-optimized.json",
       "source_commit": "69c2bbbd221557a1b756cb6c7bf15bfd89be07d9"
+    },
+    {
+      "path": "docs/public-v4-retest.json",
+      "source_commit": "965c59d70ec53d3ec85f899cd64f012ad7074c4f"
+    },
+    {
+      "path": "docs/v4-validation.json",
+      "source_commit": "965c59d70ec53d3ec85f899cd64f012ad7074c4f"
     }
   ],
   "upstream_package_commit": "9f6df2ba5acf871376e22b64a3d0724e4b575044",
-  "validation_reports": [
-    "docs/public-v4-retest.json",
-    "docs/v4-validation.json"
-  ]
+  "validation_reports": []
 }

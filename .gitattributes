@@ -14,6 +14,7 @@
 # Preserve verified source/report bytes across Windows and Linux checkouts.
 /minivectordb/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 /tests/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+/tests_cross/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 /mysqltest/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 /native/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol -filter
 /docs/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

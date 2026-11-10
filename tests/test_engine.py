@@ -12,6 +12,16 @@ from minivectordb.protocol import statements
 
 
 class EngineTests(unittest.TestCase):
+    def test_long_varchar_predicates_do_not_enforce_column_width(self):
+        self.db.execute('CREATE TABLE t(id BIGINT PRIMARY KEY,s VARCHAR(2))')
+        self.db.execute("INSERT INTO t VALUES (1,'ab'),(2,'中')")
+        self.assertEqual(self.query("SELECT id FROM t WHERE s='abc'"), [])
+        self.assertEqual(self.query("SELECT id FROM t WHERE s<'abc' ORDER BY id"), [(1,)])
+        self.assertEqual(self.db.execute("DELETE FROM t WHERE s='abc'"), 0)
+        self.assertEqual(self.query('SELECT id FROM t ORDER BY id'), [(1,), (2,)])
+        with self.assertRaises(DBError):
+            self.db.execute("INSERT INTO t VALUES (3,'abc')")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.db = Engine(self.temp.name, sort_memory=4096)

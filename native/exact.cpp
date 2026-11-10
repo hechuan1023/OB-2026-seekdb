@@ -37,11 +37,12 @@ MV_EXPORT int mv_abi_version() { return 1; }
 // combined in a fixed order, so the result is bitwise identical regardless of
 // which SIMD width the compiler picks for the per-lane inner loops. More lanes
 // shorten the loop-carried dependency that prevents wide vectorization.
-MV_TARGET_CLONES MV_EXPORT std::int64_t mv_topk(
-    const float *vectors, const std::int64_t *keys, std::uint64_t rows,
-    std::uint64_t dimensions, const float *query, const std::uint64_t *selection,
-    std::uint64_t selected, std::uint64_t keep, std::uint64_t *positions,
-    double *distances) noexcept {
+MV_EXPORT MV_TARGET_CLONES std::int64_t mv_topk(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t rows, std::uint64_t dimensions,
+    const float *__restrict query, const std::uint64_t *__restrict selection,
+    std::uint64_t selected, std::uint64_t keep,
+    std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
   if (!vectors || !keys || !query || !positions || !distances || !dimensions ||
       dimensions > 65536 || keep == 0 || rows > SIZE_MAX / dimensions)
     return -1;
@@ -81,7 +82,10 @@ MV_TARGET_CLONES MV_EXPORT std::int64_t mv_topk(
         correction = (next - sum) - term;
         sum = next;
       }
-      const Candidate item{std::sqrt(sum), keys[row], row};
+      // Squared distance: monotone in the true distance, so ordering and ties
+      // are unchanged. Python re-evaluates the selected rows with math.dist and
+      // its boundary guard only needs a monotone key.
+      const Candidate item{sum, keys[row], row};
       if (heap.size() < keep) {
         heap.push_back(item);
         std::push_heap(heap.begin(), heap.end(), better);

@@ -41,7 +41,7 @@ def convert(literal, column):
         if not all(map(math.isfinite, result)):  # NaN/Infinity 转换后仍为非有限值
             raise ValueError('float32 overflow')
         return result
-    except (ValueError, OverflowError, TypeError, struct.error) as exc:
+    except (ValueError, OverflowError, TypeError, RecursionError, struct.error) as exc:
         raise DBError('INVALID_VECTOR', str(exc)) from exc
 
 
@@ -199,7 +199,13 @@ class Engine:
         for name, op, literal in clauses:
             i = self.column(schema, name)
             require(schema['columns'][i][1] != 'VECTOR', 'UNSUPPORTED', 'Vector comparisons require L2_DISTANCE')
-            bound.append((i, op, convert(literal, schema['columns'][i])))
+            column = schema['columns'][i]
+            if column[1] == 'VARCHAR':
+                require(literal.kind == 'string', 'TYPE_ERROR', f'{name} requires a string literal')
+                value = literal.value
+            else:
+                value = convert(literal, column)
+            bound.append((i, op, value))
         return bound
 
     @staticmethod
