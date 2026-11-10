@@ -55,6 +55,9 @@
     "update_cycles": 10,
     "previous_seconds": 26.651687321998907,
     "candidate_seconds": 12.588492327000495,
-    "note": "10 cycles of updating 100 vectors plus one filtered TopK; the 51 MB snapshot uses the mapped-file path. The patch scans 100,000 keys per statement (~1 ms) instead of rebuilding the snapshot."
+    "note": "10 cycles of updating 100 vectors plus one filtered TopK; the 51 MB snapshot uses the mapped-file path. The patch scans 100,000 keys per statement (~1 ms) instead of rebuilding the snapshot.",
+    "delete_cycles": 10,
+    "delete_seconds": 19.509206984999764,
+    "delete_note": "Deletes change membership and still rebuild the 51 MB snapshot (~1.95 s/cycle)."
   }
 }
