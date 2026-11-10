@@ -8,7 +8,7 @@
     "minivectordb/__init__.py": "813ab12de56c56e9a2964ebba4b5cf8a0af254a7c3e37e8843093ae05c3f8c13",
     "minivectordb/__main__.py": "7b670d85fb3f5e59b92445b52088e950b05ab2905afe7654769b3c0007e60720",
     "minivectordb/build_native.py": "413fa35724165f877a97ea15c3d67e4faf31ef54f25864c17a3a9910f0579a72",
-    "minivectordb/engine.py": "df423f58e4469ed90ecee6d847149a8a17865f0b7c98f3bda5d8b51fcd8a433c",
+    "minivectordb/engine.py": "d44c1d138e789bce459eed16bc623f1ee46c522cbf2c7ec82eddef436b0e6a18",
     "minivectordb/errors.py": "d65edb6fb0d6cecc232b0bc57ef4505fdaa6a005c3f544c6e0557094872310d3",
     "minivectordb/json_protocol.py": "a3f2c37c4b1cbef315e8be7e575767c1cbcd8c868006e7975a6fe450c55f8a57",
     "minivectordb/native.py": "9294fed233b17adb0468dfc8fae5dfaac3f0e9d5c205027df92eb94a69855db5",
