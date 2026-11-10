@@ -20,10 +20,14 @@ from .vector_index import VectorIndexes
 def convert(literal, column, native=True):
     name, typ, size = column
     if typ == 'BIGINT':
-        require(literal.kind == 'number' and re.fullmatch(r'[+-]?\d+', literal.value), 'TYPE_ERROR', f'{name} requires BIGINT')
-        digits = literal.value.lstrip('+-').lstrip('0') or '0'
+        text = literal.value
+        digits = text[1:] if text[:1] in '+-' else text
+        # isdecimal() matches the same Unicode decimal digits as \d but avoids
+        # a regex call per inserted value.
+        require(literal.kind == 'number' and digits.isdecimal(), 'TYPE_ERROR', f'{name} requires BIGINT')
+        digits = digits.lstrip('0') or '0'
         require(len(digits) <= 19, 'TYPE_ERROR', 'BIGINT overflow')
-        value = int(('-' if literal.value.startswith('-') else '') + digits)
+        value = int(('-' if text.startswith('-') else '') + digits)
         require(-(1 << 63) <= value < (1 << 63), 'TYPE_ERROR', 'BIGINT overflow')
         return value
     require(literal.kind == 'string', 'TYPE_ERROR', f'{name} requires a string literal')
