@@ -33,10 +33,10 @@
     "branch": "2026-competition-round2",
     "status": "Submission source snapshot; containing Git commit is the version identifier. Use git rev-parse HEAD.",
     "sha256": {
-      "Dockerfile": "940e9045478c36d2833a49069d0a24abb9f23c45021097b9ceff2d1263f989e3",
+      "Dockerfile": "65a02596b5dea5824910cf22c1555d1ae94b292e158ef9a8eedc2e8a58362c87",
       "build-dependencies.lock": "0e0f3d6bcff271e667b136eb9954505f45d9658ebef5b0ddff018327725c757a",
       "minivectordb/__init__.py": "813ab12de56c56e9a2964ebba4b5cf8a0af254a7c3e37e8843093ae05c3f8c13",
-      "minivectordb/__main__.py": "228e78f83a61fa31adbe70a1b7986824f74741c41f645245ce185c660c84d75c",
+      "minivectordb/__main__.py": "7b670d85fb3f5e59b92445b52088e950b05ab2905afe7654769b3c0007e60720",
       "minivectordb/build_native.py": "413fa35724165f877a97ea15c3d67e4faf31ef54f25864c17a3a9910f0579a72",
       "minivectordb/engine.py": "b52081cbab4e0327e04f89844f8d390608ff172b37d4fd49baab5894597f022c",
       "minivectordb/errors.py": "d65edb6fb0d6cecc232b0bc57ef4505fdaa6a005c3f544c6e0557094872310d3",
@@ -75,11 +75,13 @@
       "tests_cross/p8_malformed.py": "94efade0f2bf5f980eb3cee33080dcd4272c9d0d44468bb534cecaa86fb8f99d",
       "tests_cross/p9_protocol_streams.py": "d191ad02597898694826a6bad6a4a75e99d30e7851776989c96dec6e8811cdf5",
       "tests_cross/profile_query.py": "ab7bc96131bded27e3f052e08b1b3bb3a5e6e8a14ef740cc62b0d363471cdcf3",
-      "tests_cross/profile_write.py": "dadce467ccf2cec8fe9bd82f30d86f0c77d18039bfaa0bcc466e91280461f541"
+      "tests_cross/profile_write.py": "dadce467ccf2cec8fe9bd82f30d86f0c77d18039bfaa0bcc466e91280461f541",
+      "minivectordb/json_protocol.py": "115047b92abe6c7c8339370f697a6cd747935c1734491199f4a31812176fdd32",
+      "tests/test_json_protocol.py": "5458c616d1dd3868e15be3d0fb657405c85e4b184a54144488af79f00ae13af9"
     },
     "verified_reports": [],
     "initial_base_commit": "c842a368c3394748d0499386c18f6b465242e141",
-    "development_parent_commit": "83d1ae0d2208a04fa281dfcbeb3aa7c763d4b2a7",
+    "development_parent_commit": "3b73aa68ea8268162721a0521bee690e1466ca82",
     "historical_reports": [
       {
         "path": "docs/r2-final-1.json",
@@ -122,7 +124,7 @@
         "source_commit": "965c59d70ec53d3ec85f899cd64f012ad7074c4f"
       }
     ],
-    "upstream_package_commit": "9f6df2ba5acf871376e22b64a3d0724e4b575044",
+    "upstream_package_commit": "f4d4e26653af823a7601668802f80e374ad6643c",
     "validation_reports": []
   },
   "conversations": [
@@ -605,6 +607,11 @@
       "id": "2026-11-10-fix-verification",
       "source": "agent_executed_tool_result",
       "output": "Windows: unittest 108 passed; P7 112 passed, P8 170 passed, P9 33 passed. Linux container: unittest 108 passed, P8 170 passed, P9 33 passed. Container image built from current workspace; official protocol not checked. Earlier fixed-version Linux test: P5 19 passed; nm showed mv_topk.avx2, mv_topk.default and resolver. These are Agent-run tests, not student-authored explanations."
+    },
+    {
+      "id": "official-jsonl-f4",
+      "source": "agent_executed_tool_result",
+      "output": "官方 f4d4e266 发布 JSONL 协议。Agent 实现 Docker JSONL 入口；WSL Linux 官方 protocol_check --image 实测握手 PASS、20 组公开用例均 PASS，Windows unittest 109 项通过。未执行正式评测；官方配置未冻结具体错误码。上述为 Agent 实施及结果，不代表学生本人理解。"
     }
   ],
   "retrospective": {

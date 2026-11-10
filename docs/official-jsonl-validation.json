@@ -1,0 +1,161 @@
+{
+  "official_commit": "f4d4e26653af823a7601668802f80e374ad6643c",
+  "environment": "WSL Linux official protocol_check --image against Docker minivectordb:jsonl, official default config, read-only root and independent data volumes",
+  "image": "minivectordb:jsonl",
+  "handshake": {
+    "scope": "public-protocol-check",
+    "passed": true,
+    "cases": [
+      {
+        "id": "handshake",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 961
+      }
+    ],
+    "note": "Local diagnostic only; no performance/Agent scores or platform callbacks."
+  },
+  "public_cases": {
+    "scope": "public-protocol-check",
+    "passed": true,
+    "cases": [
+      {
+        "id": "sql_crud",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 652
+      },
+      {
+        "id": "sql_comparisons",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 714
+      },
+      {
+        "id": "sql_ordering",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 673
+      },
+      {
+        "id": "sql_empty",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 656
+      },
+      {
+        "id": "sql_primary_key",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 687
+      },
+      {
+        "id": "sql_unicode",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 640
+      },
+      {
+        "id": "sql_bigint",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 686
+      },
+      {
+        "id": "sql_unsupported",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 687
+      },
+      {
+        "id": "storage_restart",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 1156
+      },
+      {
+        "id": "vector_euclidean",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 702
+      },
+      {
+        "id": "transaction_commit",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 673
+      },
+      {
+        "id": "transaction_rollback",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 658
+      },
+      {
+        "id": "storage_mutations",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 1189
+      },
+      {
+        "id": "storage_multiple_tables",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 1229
+      },
+      {
+        "id": "vector_ties_and_filter",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 668
+      },
+      {
+        "id": "vector_float32",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 621
+      },
+      {
+        "id": "vector_index_maintenance",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 1254
+      },
+      {
+        "id": "transaction_failed_insert",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 1172
+      },
+      {
+        "id": "transaction_autocommit_atomic",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 1180
+      },
+      {
+        "id": "transaction_shutdown_rollback",
+        "status": "PASS",
+        "message": "",
+        "duration_ms": 1129
+      }
+    ],
+    "note": "Local diagnostic only; no performance/Agent scores or platform callbacks."
+  },
+  "limitations": "Public checks only; no hidden cases, formal submission or benchmark.",
+  "image_id": "sha256:5ca5b30d6784232b12899dbc30d49338b282d23bd3f63669fc517a22957824f5",
+  "source_sha256": {
+    "Dockerfile": "65a02596b5dea5824910cf22c1555d1ae94b292e158ef9a8eedc2e8a58362c87",
+    "minivectordb/__main__.py": "7b670d85fb3f5e59b92445b52088e950b05ab2905afe7654769b3c0007e60720",
+    "minivectordb/json_protocol.py": "115047b92abe6c7c8339370f697a6cd747935c1734491199f4a31812176fdd32",
+    "minivectordb/engine.py": "b52081cbab4e0327e04f89844f8d390608ff172b37d4fd49baab5894597f022c",
+    "minivectordb/sql.py": "530994031657abe8dc064765fcdc407cb294f448e41c6d213a69627f9236e6fb",
+    "minivectordb/storage.py": "61392cbdb1a95d83ff9556c2177e9b1de8382d4f05657325ddc33ff23b8f25d9",
+    "minivectordb/vector_index.py": "2ca294a08fd2aaf9640756089c7338196fce687264c50d8ee4c669737b64d55b",
+    "native/exact.cpp": "34179e4e68d5c69800fc00c69e64afe2fa0250b592596e5d1dcdefb62c714851"
+  },
+  "commands": [
+    "python3 protocol_check/run.py --image minivectordb:jsonl --handshake-only --output <new-directory>",
+    "python3 protocol_check/run.py --image minivectordb:jsonl --output <new-directory>"
+  ]
+}

@@ -16,5 +16,5 @@ COPY --from=native-builder /out/_native.so /app/minivectordb/_native.so
 RUN python -m compileall -q /app/minivectordb && mkdir -p /data
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 VOLUME ["/data"]
-ENTRYPOINT ["python", "-m", "minivectordb"]
+ENTRYPOINT ["python", "-m", "minivectordb", "--wire", "jsonl"]
 CMD ["--data-dir", "/data"]

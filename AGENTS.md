@@ -1,8 +1,8 @@
 # MiniVectorDB development guidance
 
 - Read `docs/minivectordb-requirements.md`, `README.md`, and `docs/validation.md` before changes.
-- Upstream public SQL cases are in `mysqltest/`; do not modify their inputs or expected results to make tests pass. They do not specify the process protocol.
-- The public-v4 package (9f6df2ba5) includes 20 cases and local driver instructions but no complete official runtime protocol. Keep provisional protocol behavior isolated and explicitly labeled; test mode changes must preserve the active process/transaction.
+- Upstream public SQL cases are in `mysqltest/`; do not modify their inputs or expected results to make tests pass.
+- Official commit f4d4e2665 supplies `STDIO_PROTOCOL.md` and `protocol_check/`. Docker defaults to JSONL; the local SQL adapter remains available for historical tests. Request search modes must preserve the active process and transaction.
 - Storage, execution, transactions, and vector indexes must be implemented here. Do not use existing database engines or vector index libraries.
 - All database data, logs, indexes, and temporary files belong under the configured data directory (default `/data`).
 - Preserve statement atomicity inside explicit transactions and acknowledge commits only after durable WAL synchronization.

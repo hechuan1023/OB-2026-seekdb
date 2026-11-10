@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--checkpoint-mib', type=float, default=64)
     parser.add_argument('--no-ready', action='store_true')
     parser.add_argument('--disable-native', action='store_true')
+    parser.add_argument('--wire', choices=('sql', 'jsonl'), default='sql')
     parser.add_argument('--local-mode-controls', action='store_true',
                         help='Enable local self-test --mode lines; NOT an official wire protocol')
     args = parser.parse_args()
@@ -29,6 +30,12 @@ def main():
                         int(args.cache_memory_mib * 1024 * 1024), int(args.checkpoint_mib * 1024 * 1024),
                         not args.disable_native)
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+        if args.wire == 'jsonl':
+            from .json_protocol import serve
+            closed = serve(engine, sys.stdin, sys.stdout)
+            if closed:
+                engine = None
+            return 0
         if not args.no_ready:
             print('READY', flush=True)
         try:
