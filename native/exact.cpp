@@ -8,6 +8,10 @@
 #include <cstring>
 #include <vector>
 
+#if defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h>
+#endif
+
 #ifdef _WIN32
 #define MV_EXPORT extern "C" __declspec(dllexport)
 #else
@@ -57,6 +61,37 @@ static inline double distance_squared(const float *__restrict v,
   }
   return acc[0] + acc[1] + acc[2] + acc[3] + acc[4] + acc[5] + acc[6] + acc[7];
 }
+
+#if defined(__x86_64__) || defined(__i386__)
+// Explicit FMA reduction for CPUs that support it. The two accumulators and the
+// horizontal sum use a different rounding order than distance_squared, so the
+// values can differ in the last bits; Python's 1e-12 boundary guard and its
+// math.dist re-evaluation cover that, and the selected row set is unchanged.
+__attribute__((target("avx2,fma"))) static inline double
+distance_fma(const float *__restrict v, const float *__restrict query,
+             std::uint64_t dimensions) {
+  __m256d a0 = _mm256_setzero_pd(), a1 = _mm256_setzero_pd();
+  std::uint64_t j = 0;
+  for (; j + 8 <= dimensions; j += 8) {
+    const __m256d d0 = _mm256_sub_pd(_mm256_cvtps_pd(_mm_loadu_ps(v + j)),
+                                     _mm256_cvtps_pd(_mm_loadu_ps(query + j)));
+    const __m256d d1 = _mm256_sub_pd(_mm256_cvtps_pd(_mm_loadu_ps(v + j + 4)),
+                                     _mm256_cvtps_pd(_mm_loadu_ps(query + j + 4)));
+    a0 = _mm256_fmadd_pd(d0, d0, a0);
+    a1 = _mm256_fmadd_pd(d1, d1, a1);
+  }
+  const __m256d sum4 = _mm256_add_pd(a0, a1);
+  const __m128d lo = _mm256_castpd256_pd128(sum4);
+  const __m128d hi = _mm256_extractf128_pd(sum4, 1);
+  const __m128d pair = _mm_add_pd(lo, hi);
+  double sum = _mm_cvtsd_f64(pair) + _mm_cvtsd_f64(_mm_unpackhi_pd(pair, pair));
+  for (; j < dimensions; ++j) {
+    const double delta = static_cast<double>(v[j]) - query[j];
+    sum += delta * delta;
+  }
+  return sum;
+}
+#endif
 
 static inline bool json_space(char c) {
   return c == ' ' || c == '\t' || c == '\n' || c == '\r';
@@ -139,12 +174,14 @@ MV_EXPORT int mv_abi_version() { return 1; }
 
 // Retain K+1 candidates. Python verifies a conservative boundary gap, re-evaluates
 // selected distances with math.dist, and falls back on ambiguous boundaries.
-MV_EXPORT MV_TARGET_CLONES std::int64_t mv_topk(
-    const float *__restrict vectors, const std::int64_t *__restrict keys,
-    std::uint64_t rows, std::uint64_t dimensions,
-    const float *__restrict query, const std::uint64_t *__restrict selection,
-    std::uint64_t selected, std::uint64_t keep,
-    std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
+template <typename Distance>
+static std::int64_t topk_impl(
+    Distance distance, const float *__restrict vectors,
+    const std::int64_t *__restrict keys, std::uint64_t rows,
+    std::uint64_t dimensions, const float *__restrict query,
+    const std::uint64_t *__restrict selection, std::uint64_t selected,
+    std::uint64_t keep, std::uint64_t *__restrict positions,
+    double *__restrict distances) noexcept {
   if (!vectors || !keys || !query || !positions || !distances || !dimensions ||
       dimensions > 65536 || keep == 0 || rows > SIZE_MAX / dimensions)
     return -1;
@@ -159,7 +196,7 @@ MV_EXPORT MV_TARGET_CLONES std::int64_t mv_topk(
       // Squared distance: monotone in the true distance, so ordering and ties
       // are unchanged. Python re-evaluates the selected rows with math.dist and
       // its boundary guard only needs a monotone key.
-      const Candidate item{distance_squared(vectors + row * dimensions, query, dimensions),
+      const Candidate item{distance(vectors + row * dimensions, query, dimensions),
                            keys[row], row};
       if (heap.size() < keep) {
         heap.push_back(item);
@@ -180,3 +217,31 @@ MV_EXPORT MV_TARGET_CLONES std::int64_t mv_topk(
     return -1;  // No C++ exception may escape the C ABI.
   }
 }
+
+MV_EXPORT MV_TARGET_CLONES std::int64_t mv_topk(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t rows, std::uint64_t dimensions,
+    const float *__restrict query, const std::uint64_t *__restrict selection,
+    std::uint64_t selected, std::uint64_t keep,
+    std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
+  return topk_impl(distance_squared, vectors, keys, rows, dimensions, query,
+                   selection, selected, keep, positions, distances);
+}
+
+#if defined(__x86_64__) || defined(__i386__)
+MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t mv_topk_fma(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t rows, std::uint64_t dimensions,
+    const float *__restrict query, const std::uint64_t *__restrict selection,
+    std::uint64_t selected, std::uint64_t keep,
+    std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
+  return topk_impl(distance_fma, vectors, keys, rows, dimensions, query,
+                   selection, selected, keep, positions, distances);
+}
+
+MV_EXPORT int mv_has_fma() {
+  return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma");
+}
+#else
+MV_EXPORT int mv_has_fma() { return 0; }
+#endif

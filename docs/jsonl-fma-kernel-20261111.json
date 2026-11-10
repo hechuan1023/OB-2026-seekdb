@@ -1,0 +1,235 @@
+{
+  "scope": "Local JSONL correctness and wall-clock comparison; not the official benchmark.",
+  "date": "2026-11-11",
+  "images": {
+    "candidate": "sha256:b2029ea2a801b00b3a400c2709af298632285e80c4756ed57aee8bd247002387",
+    "previous": "sha256:fdfe70290514f167bc16d0b10037bb48f71053f386b8f00a4d94d54739e2f6ea"
+  },
+  "source_sha256": {
+    "native/exact.cpp": "ce313498dad58cff0f5699e11fc1910eb3bef0eee6d37b02feaa6c4f9288bc9f",
+    "minivectordb/vector_index.py": "24d4d515ed8bd8ff0fcbe7de826bac35e19aa3d21cf403e6f848c9ff97e1f9d1"
+  },
+  "seed": 20261110,
+  "rows": 10000,
+  "dimensions": 128,
+  "k": 10,
+  "engine_profile": {
+    "note": "Engine-level timings from .local-profile2.py inside the container; three runs, medians.",
+    "previous": {
+      "kernel_unfiltered_ms": 0.3274,
+      "select_unfiltered_ms": 0.4566,
+      "select_filtered_cached_ms": 0.1144
+    },
+    "candidate": {
+      "kernel_unfiltered_ms": 0.2937,
+      "select_unfiltered_ms": 0.3842,
+      "select_filtered_cached_ms": 0.112
+    }
+  },
+  "scenarios": {
+    "5": {
+      "groups": 5,
+      "queries": 1000,
+      "images": [
+        "minivectordb:fma-kernel",
+        "minivectordb:inline-kernel"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:fma-kernel",
+          "round": 1,
+          "write_seconds": 3.2151490000105696,
+          "query_seconds": 1.9586337997898227,
+          "filtered_seconds": 0.9254057998623466,
+          "unfiltered_seconds": 1.033227999927476,
+          "memory_peak_bytes": 37273600,
+          "data_device_wbytes": 8609792,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:inline-kernel",
+          "round": 1,
+          "write_seconds": 4.142806500007282,
+          "query_seconds": 2.1788592997618252,
+          "filtered_seconds": 1.0459912998048821,
+          "unfiltered_seconds": 1.132867999956943,
+          "memory_peak_bytes": 36655104,
+          "data_device_wbytes": 8609792,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:fma-kernel",
+          "round": 2,
+          "write_seconds": 4.2789974000043,
+          "query_seconds": 2.0965338000969496,
+          "filtered_seconds": 1.004314699981478,
+          "unfiltered_seconds": 1.0922191001154715,
+          "memory_peak_bytes": 36171776,
+          "data_device_wbytes": 8609792,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:inline-kernel",
+          "round": 2,
+          "write_seconds": 3.5095533999992767,
+          "query_seconds": 2.1090278999326983,
+          "filtered_seconds": 0.9935710999125149,
+          "unfiltered_seconds": 1.1154568000201834,
+          "memory_peak_bytes": 36741120,
+          "data_device_wbytes": 8609792,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=265 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:fma-kernel",
+          "round": 3,
+          "write_seconds": 3.896010099997511,
+          "query_seconds": 1.8961069998913445,
+          "filtered_seconds": 0.9075576000177534,
+          "unfiltered_seconds": 0.988549399873591,
+          "memory_peak_bytes": 36769792,
+          "data_device_wbytes": 8609792,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:inline-kernel",
+          "round": 3,
+          "write_seconds": 4.048209600005066,
+          "query_seconds": 2.125377199758077,
+          "filtered_seconds": 1.0023080998944351,
+          "unfiltered_seconds": 1.123069099863642,
+          "memory_peak_bytes": 36757504,
+          "data_device_wbytes": 8609792,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+        }
+      ],
+      "medians": {
+        "minivectordb:fma-kernel": {
+          "write_seconds": 3.896010099997511,
+          "query_seconds": 1.9586337997898227,
+          "filtered_seconds": 0.9254057998623466,
+          "unfiltered_seconds": 1.033227999927476,
+          "memory_peak_bytes": 36769792,
+          "data_device_wbytes": 8609792
+        },
+        "minivectordb:inline-kernel": {
+          "write_seconds": 4.048209600005066,
+          "query_seconds": 2.125377199758077,
+          "filtered_seconds": 1.0023080998944351,
+          "unfiltered_seconds": 1.123069099863642,
+          "memory_peak_bytes": 36741120,
+          "data_device_wbytes": 8609792
+        }
+      }
+    },
+    "600": {
+      "groups": 600,
+      "queries": 1000,
+      "images": [
+        "minivectordb:fma-kernel",
+        "minivectordb:inline-kernel"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:fma-kernel",
+          "round": 1,
+          "write_seconds": 3.207429600006435,
+          "query_seconds": 1.826646699977573,
+          "filtered_seconds": 0.8035094999795547,
+          "unfiltered_seconds": 1.0231371999980183,
+          "memory_peak_bytes": 36921344,
+          "data_device_wbytes": 8626176,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8626176 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:inline-kernel",
+          "round": 1,
+          "write_seconds": 3.658551999993506,
+          "query_seconds": 1.9115911001863424,
+          "filtered_seconds": 0.815946200149483,
+          "unfiltered_seconds": 1.0956449000368593,
+          "memory_peak_bytes": 36925440,
+          "data_device_wbytes": 8626176,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8626176 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:fma-kernel",
+          "round": 2,
+          "write_seconds": 4.0753733000019565,
+          "query_seconds": 1.8942940001288662,
+          "filtered_seconds": 0.829104099990218,
+          "unfiltered_seconds": 1.0651899001386482,
+          "memory_peak_bytes": 37089280,
+          "data_device_wbytes": 8626176,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8626176 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:inline-kernel",
+          "round": 2,
+          "write_seconds": 3.6491290999983903,
+          "query_seconds": 1.99281580002571,
+          "filtered_seconds": 0.8713859000999946,
+          "unfiltered_seconds": 1.1214298999257153,
+          "memory_peak_bytes": 36929536,
+          "data_device_wbytes": 8626176,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8626176 rios=0 wios=265 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:fma-kernel",
+          "round": 3,
+          "write_seconds": 3.878364200005308,
+          "query_seconds": 1.8672730998223415,
+          "filtered_seconds": 0.8312362998985918,
+          "unfiltered_seconds": 1.0360367999237496,
+          "memory_peak_bytes": 37203968,
+          "data_device_wbytes": 8626176,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8626176 rios=0 wios=266 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:inline-kernel",
+          "round": 3,
+          "write_seconds": 3.518497800003388,
+          "query_seconds": 2.3922994002350606,
+          "filtered_seconds": 1.0678880000050412,
+          "unfiltered_seconds": 1.3244114002300194,
+          "memory_peak_bytes": 36925440,
+          "data_device_wbytes": 8626176,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8626176 rios=0 wios=266 dbytes=0 dios=0"
+        }
+      ],
+      "medians": {
+        "minivectordb:fma-kernel": {
+          "write_seconds": 3.878364200005308,
+          "query_seconds": 1.8672730998223415,
+          "filtered_seconds": 0.829104099990218,
+          "unfiltered_seconds": 1.0360367999237496,
+          "memory_peak_bytes": 37089280,
+          "data_device_wbytes": 8626176
+        },
+        "minivectordb:inline-kernel": {
+          "write_seconds": 3.6491290999983903,
+          "query_seconds": 1.99281580002571,
+          "filtered_seconds": 0.8713859000999946,
+          "unfiltered_seconds": 1.1214298999257153,
+          "memory_peak_bytes": 36925440,
+          "data_device_wbytes": 8626176
+        }
+      }
+    }
+  },
+  "pressure_64mib": {
+    "rows": 18000,
+    "dimensions": 1024,
+    "vector_bytes": 73728000,
+    "memory_peak_bytes": 67108864,
+    "elapsed_seconds": 63.75135056899944,
+    "oom": "0",
+    "oom_kill": "0"
+  },
+  "limitations": [
+    "Fixed seed and one data distribution per scenario; no cold-cache control.",
+    "The local driver includes Docker Desktop pipe and host-side SQL construction; it is not official T.",
+    "The FMA path is selected only when the CPU reports AVX2 and FMA; otherwise the portable kernel is used.",
+    "FMA changes the rounding order; the 1e-12 boundary guard and math.dist re-evaluation cover it.",
+    "io.stat device attribution and full writeback are not verified; these values are not official B or E."
+  ]
+}

@@ -31,6 +31,11 @@ class NativeKernel:
         if self.library.mv_abi_version() != 1:
             raise RuntimeError('Unsupported native kernel ABI')
         self.search = self.library.mv_topk
+        try:
+            if self.library.mv_has_fma():
+                self.search = self.library.mv_topk_fma
+        except AttributeError:
+            pass  # Older library: keep the portable kernel.
         self.search.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64,
                                ctypes.c_uint64, ctypes.c_void_p, ctypes.c_void_p,
                                ctypes.c_uint64, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_void_p]
