@@ -32,16 +32,17 @@ static bool better(const Candidate &a, const Candidate &b) {
   return a.distance < b.distance || (a.distance == b.distance && a.key < b.key);
 }
 
-// Keep the reduction in its own non-inlined function: inlining it into the heap
-// loop measured about 2x slower because the compiler then failed to vectorize
-// the lane loop. Eight fixed lanes make the summation order independent of the
-// SIMD width, so the default and AVX2 clones stay bitwise identical under
+// Inline the reduction into the cloned mv_topk so each clone compiles it for its
+// own target. Eight fixed lanes keep the summation order independent of the SIMD
+// width, so the default and AVX2 clones stay bitwise identical under
 // -ffp-contract=off. Plain double accumulation is used instead of compensated
 // summation: its relative error for 128 dimensions is about 1e-14, far below the
-// 1e-12 relative boundary guard in vector_index.py, and it measured ~1.7x faster.
-static MV_TARGET_CLONES __attribute__((noinline)) double
-distance_squared(const float *__restrict v, const float *__restrict query,
-                 std::uint64_t dimensions) {
+// 1e-12 relative boundary guard in vector_index.py. Inlining measured ~1.6x
+// faster than a separate non-inlined function because the AVX2 clone can then
+// vectorize the lane loop with the rest of the scan.
+static inline double distance_squared(const float *__restrict v,
+                                      const float *__restrict query,
+                                      std::uint64_t dimensions) {
   double acc[8] = {0.0};
   std::uint64_t j = 0;
   for (; j + 8 <= dimensions; j += 8) {

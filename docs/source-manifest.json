@@ -17,7 +17,7 @@
     "minivectordb/sql.py": "530994031657abe8dc064765fcdc407cb294f448e41c6d213a69627f9236e6fb",
     "minivectordb/storage.py": "09f211fe0d2baa7e3703d2936bcbd08c5c2c9fbe029f4231b60971ca51235172",
     "minivectordb/vector_index.py": "6a8d6fb830ec2acd0563f2b28e652c6812128ff740760133939a76cebee37bc0",
-    "native/exact.cpp": "f945884fa1dedc225fdd3146fd386218d583cfac32a52d299505b72d33e8da8a",
+    "native/exact.cpp": "d1452f04146504a46170c22a084674796fae3607ecf58c3a652424708a0ad4d1",
     "pyproject.toml": "b13ae7a42e05d3505490d713cdd9ce20cbb215ec3dafe6bfa38e9605f0a5387d",
     "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tests/benchmark.py": "097cf7f7a8f1138352624e81de8543a37a88a5801cb60676945b41e1e6760693",
