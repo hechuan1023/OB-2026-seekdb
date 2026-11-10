@@ -180,6 +180,166 @@
           "data_device_wbytes": 6643712
         }
       }
+    },
+    "600_swapped_order": {
+      "groups": 600,
+      "queries": 1000,
+      "images": [
+        "minivectordb:perf-r5c",
+        "minivectordb:filter-budget"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 1,
+          "query_seconds": 1.7459493001369992,
+          "filtered_seconds": 0.7336947000294458,
+          "unfiltered_seconds": 1.0122546001075534,
+          "memory_peak_bytes": 37056512,
+          "data_device_wbytes": 13828096
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 1,
+          "query_seconds": 1.785740399849601,
+          "filtered_seconds": 0.7622065997566096,
+          "unfiltered_seconds": 1.0235338000929914,
+          "memory_peak_bytes": 36925440,
+          "data_device_wbytes": 6643712
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 2,
+          "query_seconds": 2.046088599585346,
+          "filtered_seconds": 0.8674410998210078,
+          "unfiltered_seconds": 1.1786474997643381,
+          "memory_peak_bytes": 37048320,
+          "data_device_wbytes": 13828096
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 2,
+          "query_seconds": 1.9405455998930847,
+          "filtered_seconds": 0.8475561000232119,
+          "unfiltered_seconds": 1.0929894998698728,
+          "memory_peak_bytes": 36974592,
+          "data_device_wbytes": 6643712
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 3,
+          "query_seconds": 1.9074328999122372,
+          "filtered_seconds": 0.820766899982118,
+          "unfiltered_seconds": 1.0866659999301191,
+          "memory_peak_bytes": 37044224,
+          "data_device_wbytes": 13828096
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 3,
+          "query_seconds": 1.8617350999993505,
+          "filtered_seconds": 0.8139392001467058,
+          "unfiltered_seconds": 1.0477958998526447,
+          "memory_peak_bytes": 36671488,
+          "data_device_wbytes": 6643712
+        }
+      ],
+      "medians": {
+        "minivectordb:perf-r5c": {
+          "query_seconds": 1.9074328999122372,
+          "filtered_seconds": 0.820766899982118,
+          "unfiltered_seconds": 1.0866659999301191,
+          "memory_peak_bytes": 37048320,
+          "data_device_wbytes": 13828096
+        },
+        "minivectordb:filter-budget": {
+          "query_seconds": 1.8617350999993505,
+          "filtered_seconds": 0.8139392001467058,
+          "unfiltered_seconds": 1.0477958998526447,
+          "memory_peak_bytes": 36925440,
+          "data_device_wbytes": 6643712
+        }
+      }
+    },
+    "2000_swapped_order": {
+      "groups": 2000,
+      "queries": 1000,
+      "images": [
+        "minivectordb:perf-r5c",
+        "minivectordb:filter-budget"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 1,
+          "query_seconds": 2.3202095997985452,
+          "filtered_seconds": 1.0930126999592176,
+          "unfiltered_seconds": 1.2271968998393277,
+          "memory_peak_bytes": 36954112,
+          "data_device_wbytes": 13836288
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 1,
+          "query_seconds": 1.780667099985294,
+          "filtered_seconds": 0.754052100062836,
+          "unfiltered_seconds": 1.026614999922458,
+          "memory_peak_bytes": 37548032,
+          "data_device_wbytes": 6651904
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 2,
+          "query_seconds": 2.102737999870442,
+          "filtered_seconds": 1.0039661998889642,
+          "unfiltered_seconds": 1.0987717999814777,
+          "memory_peak_bytes": 36954112,
+          "data_device_wbytes": 13836288
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 2,
+          "query_seconds": 2.108249000229989,
+          "filtered_seconds": 0.9170409002981614,
+          "unfiltered_seconds": 1.1912080999318277,
+          "memory_peak_bytes": 37511168,
+          "data_device_wbytes": 6651904
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 3,
+          "query_seconds": 2.4244781998568214,
+          "filtered_seconds": 1.1732384998904308,
+          "unfiltered_seconds": 1.2512396999663906,
+          "memory_peak_bytes": 37212160,
+          "data_device_wbytes": 13836288
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 3,
+          "query_seconds": 1.9479606998502277,
+          "filtered_seconds": 0.8232716999627883,
+          "unfiltered_seconds": 1.1246889998874394,
+          "memory_peak_bytes": 37683200,
+          "data_device_wbytes": 6651904
+        }
+      ],
+      "medians": {
+        "minivectordb:perf-r5c": {
+          "query_seconds": 2.3202095997985452,
+          "filtered_seconds": 1.0930126999592176,
+          "unfiltered_seconds": 1.2271968998393277,
+          "memory_peak_bytes": 36954112,
+          "data_device_wbytes": 13836288
+        },
+        "minivectordb:filter-budget": {
+          "query_seconds": 1.9479606998502277,
+          "filtered_seconds": 0.8232716999627883,
+          "unfiltered_seconds": 1.1246889998874394,
+          "memory_peak_bytes": 37548032,
+          "data_device_wbytes": 6651904
+        }
+      }
     }
   },
   "pressure_64mib": {
@@ -194,6 +354,41 @@
   "limitations": [
     "Fixed seed and one data distribution per scenario; no cold-cache control.",
     "The 5-value difference is within local pipe and round noise; the 600-value gain is small.",
-    "io.stat device attribution and full writeback are not verified; not official B or E."
-  ]
+    "io.stat device attribution and full writeback are not verified; not official B or E.",
+    "The A/B driver runs the candidate first in each pair; swapping the order flips the 600-value direction, so end-to-end differences are order-sensitive. The 2,000-value comparison uses the swapped order (formal first)."
+  ],
+  "high_cardinality_engine_profile": {
+    "note": "Engine-level warm filtered query, 10,000 x 128, 200 queries after the cold scan.",
+    "1000_groups": {
+      "1MiB": {
+        "filters": 1000,
+        "filter_bytes": 772776,
+        "suppressed": 0,
+        "column_values": 0,
+        "warm_ms": 0.1286
+      },
+      "1.5MiB": {
+        "filters": 1000,
+        "filter_bytes": 772776,
+        "suppressed": 0,
+        "column_values": 0,
+        "warm_ms": 0.1208
+      }
+    },
+    "2000_groups": {
+      "1MiB": {
+        "filters": 1,
+        "suppressed": 1,
+        "column_values": 1,
+        "warm_ms": 0.3461
+      },
+      "1.5MiB": {
+        "filters": 2000,
+        "filter_bytes": 1418776,
+        "suppressed": 0,
+        "column_values": 0,
+        "warm_ms": 0.1015
+      }
+    }
+  }
 }
