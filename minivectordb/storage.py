@@ -10,6 +10,7 @@ import pickle
 import struct
 import sys
 import zlib
+from array import array
 from collections import OrderedDict
 from pathlib import Path
 
@@ -163,8 +164,67 @@ class DiskHash:
             self.file = None
 
 
+def _encode_row(record):
+    """Compact row encoding: flag, table, key, then one tagged value each.
+
+    The type byte lets read_record tell this apart from the older pickled
+    records (which start with the pickle PROTO byte) without a WAL version bump.
+    """
+    _, table, key, row = record
+    parts = [b'\x00' if row is None else b'\x01', struct.pack('<qq', table, key)]
+    if row is not None:
+        parts.append(struct.pack('<I', len(row)))
+        for value in row:
+            if value is None:
+                parts.append(b'\x00')
+            elif isinstance(value, int):
+                parts.append(b'\x01' + struct.pack('<q', value))
+            elif isinstance(value, str):
+                encoded = value.encode('utf-8')
+                parts.append(b'\x02' + struct.pack('<I', len(encoded)) + encoded)
+            elif isinstance(value, array):
+                parts.append(b'\x03' + struct.pack('<I', len(value)) + value.tobytes())
+            else:
+                raise TypeError('Unsupported row value')
+    return b''.join(parts)
+
+
+def _decode_row(data):
+    table, key = struct.unpack_from('<qq', data, 2)
+    if data[1] == 0:
+        return ('row', table, key, None)
+    count, = struct.unpack_from('<I', data, 18)
+    offset = 22
+    values = []
+    for _ in range(count):
+        kind = data[offset]
+        offset += 1
+        if kind == 0:
+            values.append(None)
+        elif kind == 1:
+            value, = struct.unpack_from('<q', data, offset)
+            offset += 8
+            values.append(value)
+        elif kind == 2:
+            length, = struct.unpack_from('<I', data, offset)
+            offset += 4
+            values.append(data[offset:offset + length].decode('utf-8'))
+            offset += length
+        elif kind == 3:
+            length, = struct.unpack_from('<I', data, offset)
+            offset += 4
+            values.append(array('f', data[offset:offset + 4 * length]))
+            offset += 4 * length
+        else:
+            raise RuntimeError('Invalid row value type')
+    return ('row', table, key, tuple(values))
+
+
 def write_record(file, value):
-    data = pickle.dumps(value, protocol=5)
+    if value[0] == 'row':
+        data = b'\x01' + _encode_row(value)
+    else:
+        data = b'\x00' + pickle.dumps(value, protocol=5)
     position = file.tell()
     # One write for length+payload halves the syscall count per record; the
     # on-disk bytes are identical to the previous two-write form.
@@ -181,7 +241,12 @@ def read_record(file, position):
     data = file.read(length)
     if len(data) != length:
         raise RuntimeError('Truncated record')
-    return pickle.loads(data)
+    kind = data[:1]
+    if kind == b'\x01':
+        return _decode_row(data)
+    if kind == b'\x00':
+        return pickle.loads(data[1:])
+    return pickle.loads(data)  # Older pickled record (starts with PROTO).
 
 
 def records(file, start, end):

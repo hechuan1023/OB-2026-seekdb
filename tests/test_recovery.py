@@ -218,3 +218,24 @@ class RecoveryTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class RecordFormatTests(unittest.TestCase):
+    def test_row_round_trip_and_old_pickle_fallback(self):
+        import pickle
+        from array import array
+        from minivectordb.storage import LENGTH, read_record, write_all, write_record
+
+        row = ('row', 3, -7, (5, '你好', array('f', [1.5, -2.0])))
+        delete = ('row', 3, 8, None)
+        schema = ('schema', 't', {'id': 1, 'columns': [('id', 'BIGINT', 0)]})
+        with tempfile.TemporaryFile() as file:
+            positions = [write_record(file, value) for value in (row, delete, schema)]
+            for position, expected in zip(positions, (row, delete, schema)):
+                self.assertEqual(read_record(file, position), expected)
+        # A record written by the previous pickled format still reads.
+        with tempfile.TemporaryFile() as file:
+            data = pickle.dumps(row, protocol=5)
+            write_all(file, LENGTH.pack(len(data)) + data)
+            file.seek(0)
+            self.assertEqual(read_record(file, 0), row)
