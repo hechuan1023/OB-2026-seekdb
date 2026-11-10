@@ -177,6 +177,30 @@ class NativeIndexTests(unittest.TestCase):
             self.compare_reference(sql.format(value))
         self.assertLessEqual(self.db.vector_indexes.filter_bytes, self.db.vector_indexes.filter_budget)
 
+    def test_vector_update_patches_snapshot_and_rollback_rebuilds(self):
+        sql = "SELECT id FROM t ORDER BY L2_DISTANCE(v,'[9,9,9,9]') LIMIT 1"
+        self.compare_reference(sql)  # build the snapshot
+        table = self.db.table('t')['id']
+        snapshot = self.db.vector_indexes.entries[table]
+        self.db.execute("UPDATE t SET v='[9,9,9,9]' WHERE id=0")
+        self.assertIs(self.db.vector_indexes.entries[table], snapshot)
+        self.assertEqual(self.compare_reference(sql), [(0,)])
+        baseline = self.compare_reference(sql)
+        # A scalar-only update keeps the snapshot too.
+        self.db.execute("UPDATE t SET tag='g9' WHERE id=1")
+        self.assertIs(self.db.vector_indexes.entries[table], snapshot)
+        # Rollback invalidates the patched snapshot and restores the old vector.
+        self.db.execute('BEGIN')
+        self.db.execute("UPDATE t SET v='[9,9,9,9]' WHERE id=2")
+        self.assertEqual(self.compare_reference(sql), [(0,)])
+        self.db.execute('ROLLBACK')
+        self.assertEqual(self.compare_reference(sql), baseline)
+        # Commit keeps the patch.
+        self.db.execute('BEGIN')
+        self.db.execute("UPDATE t SET v='[9,9,9,9]' WHERE id=3")
+        self.db.execute('COMMIT')
+        self.assertEqual(self.compare_reference(sql), [(0,)])
+
     def test_small_vector_snapshot_stays_in_memory(self):
         self.compare_reference("SELECT id FROM t ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 5")
         snapshot = self.db.vector_indexes.entries[self.db.table('t')['id']]

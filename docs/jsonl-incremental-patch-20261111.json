@@ -1,0 +1,44 @@
+{
+  "scope": "Local update/delete index-maintenance comparison; not the official benchmark.",
+  "date": "2026-11-11",
+  "images": {
+    "candidate": "sha256:b20612870f7d57f92974d25bc571b6d26db5984eaa7114a9980009392e204c58",
+    "previous": "sha256:cce6a57dc961d7c4f099bf68df2bcf26bf573cfc4d123e576caea5a33ed5b1ad"
+  },
+  "source_sha256": {
+    "minivectordb/engine.py": "10198f7a9b62917d24297d37ddd1f4c64798eceb8776337ab038e034f378b7e9",
+    "minivectordb/vector_index.py": "eaf61bf67103d6d5b62a317cb72aea88cc94bc682456204f878571b0576e3050",
+    "tests/test_vector_index.py": "d72bc1e58a1eaaa14627ddc7f8aab13be566f25ba5dab669381032a4542eef8f"
+  },
+  "workload": {
+    "rows": 10000,
+    "dimensions": 128,
+    "cycles": 100,
+    "update": "UPDATE 100 rows by id range, then one filtered TopK",
+    "delete": "DELETE 100 rows by id range, then one filtered TopK"
+  },
+  "results": {
+    "previous": {
+      "update_seconds": 6.355666960000235,
+      "delete_seconds": 5.348555696000403
+    },
+    "candidate": {
+      "update_seconds": 2.7588225299987243,
+      "delete_seconds": 5.72407704699981
+    }
+  },
+  "correctness": [
+    "119 unittest in the Linux container",
+    "20/20 official public cases",
+    "64 MiB pressure test oom_kill=0",
+    "P0 vector modes 180/180",
+    "P5 17/17",
+    "P6 transaction matrix 41/41",
+    "P7 112/112"
+  ],
+  "limitations": [
+    "Fixed single run per image for the update/delete cycles; the delete difference is within noise.",
+    "The update path is not part of the insert-only official performance workload, so this is not an E claim.",
+    "Rollback invalidates the table and rebuilds the snapshot; commit keeps the patch."
+  ]
+}

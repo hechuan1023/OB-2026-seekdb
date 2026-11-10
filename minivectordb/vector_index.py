@@ -113,6 +113,24 @@ class Snapshot:
     def key(self, position):
         return KEY.unpack_from(self.keys, position * KEY.size)[0]
 
+    def patch(self, rows, column):
+        """Overwrite the vectors of updated rows without rebuilding the snapshot.
+
+        A vector-only UPDATE keeps row membership and hash slots, so snapshot
+        positions are stable. One key scan patches a whole statement's rows.
+        """
+        if not self.count or not rows:
+            return
+        view = memoryview(self.keys).cast('q') if sys.byteorder == 'little' else None
+        width = self.dimensions * 4
+        for position in range(self.count):
+            key = (view[position] if view is not None
+                   else KEY.unpack_from(self.keys, position * KEY.size)[0])
+            row = rows.get(key)
+            if row is not None:
+                start = position * width
+                self.vectors[start:start + width] = row[column].tobytes()
+
     def close(self):
         for mapping in (self.vectors, self.keys):
             if isinstance(mapping, mmap.mmap):
@@ -165,6 +183,12 @@ class VectorIndexes:
             if table is None or table == identifier:
                 self.entries.pop(identifier).close()
         self.invalidate_filters(table)
+
+    def patch(self, table, column, rows):
+        """Apply vector-only updates to an existing snapshot in place."""
+        snapshot = self.entries.get(table)
+        if snapshot is not None:
+            snapshot.patch(rows, column)
 
     def invalidate_filters(self, table=None, columns=None):
         self.grouping_suppressed = {

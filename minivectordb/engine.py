@@ -72,6 +72,7 @@ class Engine:
         self.explicit = False
         self.transaction_changes = {}
         self.statement_changes = {}
+        self.statement_vector_patches = {}
         self.sort_memory = sort_memory
         self.mode = mode  # Both modes currently use the exact flat search path.
         self.native = native
@@ -116,6 +117,7 @@ class Engine:
             return self.select(*statement[1:])
         table = statement[2] if op == 'index' else statement[1]
         self.statement_changes = {}
+        self.statement_vector_patches = {}
         if not self.explicit:
             self.storage.begin()
         saved = self.storage.savepoint()
@@ -127,7 +129,15 @@ class Engine:
             else:
                 self.storage.rollback()
             self.statement_changes = {}
+            self.statement_vector_patches = {}
             raise
+        # A vector-only update keeps row membership and hash slots, so the
+        # snapshot can be patched in place instead of rebuilt. A rollback still
+        # invalidates the table (None) so the old vectors are restored.
+        for identifier, (column, rows) in self.statement_vector_patches.items():
+            self.vector_indexes.patch(identifier, column, rows)
+            if self.explicit:
+                self.merge_change(self.transaction_changes, identifier, None)
         # No query runs during a statement. Its old snapshots are still valid if
         # it fails and restores its savepoint, even after partial row writes.
         self.invalidate_changes(self.statement_changes)
@@ -264,14 +274,26 @@ class Engine:
                 for row in file_rows(pending):
                     key = row[schema['pk']]
                     changed = None
+                    changed_columns = None
                     if updates is not None:
                         changed = list(row)
                         for i, value in updates:
                             changed[i] = value
                         changed = tuple(changed)
+                        changed_columns = {i for i, _ in updates if row[i] != changed[i]}
                     self.storage.append(('row', schema['id'], key, changed))
-                    self.note_change(schema, None if changed is None else
-                                     {i for i, _ in updates if row[i] != changed[i]})
+                    vector_columns = ({i for i in changed_columns
+                                       if schema['columns'][i][1] == 'VECTOR'}
+                                      if changed_columns else set())
+                    if vector_columns:
+                        # Row membership and hash slots are unchanged; record the
+                        # new vectors so the snapshot can be patched in place.
+                        column = next(iter(vector_columns))
+                        self.statement_vector_patches.setdefault(
+                            schema['id'], (column, {}))[1][key] = changed
+                        self.note_change(schema, changed_columns - vector_columns)
+                    else:
+                        self.note_change(schema, changed_columns)
                     count += 1
         finally:
             os.unlink(path)
