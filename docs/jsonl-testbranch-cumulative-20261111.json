@@ -1,0 +1,228 @@
+{
+  "scope": "Cumulative local comparison of the perf/iterative-optimization test branch against the formal-branch image; not the official benchmark.",
+  "date": "2026-11-11",
+  "images": {
+    "test_branch": "sha256:cce6a57dc961d7c4f099bf68df2bcf26bf573cfc4d123e576caea5a33ed5b1ad",
+    "formal_baseline": "sha256:3b5e7eb1ba0acc8e0a9bfb74d4496cb5c87d5b874971ffebd4518bfb66a98c46"
+  },
+  "source_sha256": {
+    "native/exact.cpp": "ce313498dad58cff0f5699e11fc1910eb3bef0eee6d37b02feaa6c4f9288bc9f",
+    "minivectordb/vector_index.py": "b963da741164ceb94f608c41a38260a1cf90d704635a5c9f01772bdba0327d0e",
+    "minivectordb/storage.py": "1d84414cbdc87a638cc335b04ca682846b4aa2b5d26a1c8addcd51bc37e8b760",
+    "minivectordb/engine.py": "2f05f7cb91395f828c68777c3679ad9b9289608d75638d18110f0e521bf8a358",
+    "minivectordb/native.py": "9294fed233b17adb0468dfc8fae5dfaac3f0e9d5c205027df92eb94a69855db5"
+  },
+  "seed": 20261110,
+  "rows": 10000,
+  "dimensions": 128,
+  "k": 10,
+  "engine_profile": {
+    "note": "Engine-level timings from .local-profile2.py inside the container; medians of repeated runs.",
+    "formal_baseline": {
+      "kernel_unfiltered_ms": 0.4932,
+      "select_unfiltered_ms": 0.7465,
+      "select_filtered_cached_ms": 0.1456
+    },
+    "test_branch": {
+      "kernel_unfiltered_ms": 0.2937,
+      "select_unfiltered_ms": 0.3842,
+      "select_filtered_cached_ms": 0.112
+    }
+  },
+  "scenarios": {
+    "5": {
+      "groups": 5,
+      "queries": 1000,
+      "images": [
+        "minivectordb:filter-budget",
+        "minivectordb:perf-r5c"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 1,
+          "write_seconds": 3.942883299998357,
+          "query_seconds": 1.9997113999997964,
+          "filtered_seconds": 0.9557097999058897,
+          "unfiltered_seconds": 1.0440016000939067,
+          "memory_peak_bytes": 36728832,
+          "data_device_wbytes": 6627328,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6627328 rios=0 wios=211 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 1,
+          "write_seconds": 3.1637557999929413,
+          "query_seconds": 1.9281725998444017,
+          "filtered_seconds": 0.9094063997035846,
+          "unfiltered_seconds": 1.018766200140817,
+          "memory_peak_bytes": 36831232,
+          "data_device_wbytes": 13811712,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=274 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 2,
+          "write_seconds": 3.808513900003163,
+          "query_seconds": 1.964972600049805,
+          "filtered_seconds": 0.9334636999847135,
+          "unfiltered_seconds": 1.0315089000650914,
+          "memory_peak_bytes": 36757504,
+          "data_device_wbytes": 6627328,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6627328 rios=0 wios=211 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 2,
+          "write_seconds": 4.170830900009605,
+          "query_seconds": 2.239999700264889,
+          "filtered_seconds": 1.067851200059522,
+          "unfiltered_seconds": 1.1721485002053669,
+          "memory_peak_bytes": 37060608,
+          "data_device_wbytes": 13811712,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=273 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 3,
+          "write_seconds": 3.8068697999988217,
+          "query_seconds": 2.1353891999460757,
+          "filtered_seconds": 1.0136142000701511,
+          "unfiltered_seconds": 1.1217749998759245,
+          "memory_peak_bytes": 36712448,
+          "data_device_wbytes": 6627328,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6627328 rios=0 wios=211 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 3,
+          "write_seconds": 3.801322800005437,
+          "query_seconds": 2.049781199777499,
+          "filtered_seconds": 0.974141399943619,
+          "unfiltered_seconds": 1.0756397998338798,
+          "memory_peak_bytes": 36843520,
+          "data_device_wbytes": 13811712,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13811712 rios=0 wios=273 dbytes=0 dios=0"
+        }
+      ],
+      "medians": {
+        "minivectordb:filter-budget": {
+          "write_seconds": 3.808513900003163,
+          "query_seconds": 1.9997113999997964,
+          "filtered_seconds": 0.9557097999058897,
+          "unfiltered_seconds": 1.0440016000939067,
+          "memory_peak_bytes": 36728832,
+          "data_device_wbytes": 6627328
+        },
+        "minivectordb:perf-r5c": {
+          "write_seconds": 3.801322800005437,
+          "query_seconds": 2.049781199777499,
+          "filtered_seconds": 0.974141399943619,
+          "unfiltered_seconds": 1.0756397998338798,
+          "memory_peak_bytes": 36843520,
+          "data_device_wbytes": 13811712
+        }
+      }
+    },
+    "600": {
+      "groups": 600,
+      "queries": 1000,
+      "images": [
+        "minivectordb:filter-budget",
+        "minivectordb:perf-r5c"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 1,
+          "write_seconds": 4.166945400007535,
+          "query_seconds": 1.9139757000957616,
+          "filtered_seconds": 0.8584471001522616,
+          "unfiltered_seconds": 1.0555285999435,
+          "memory_peak_bytes": 37085184,
+          "data_device_wbytes": 6643712,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6643712 rios=0 wios=211 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 1,
+          "write_seconds": 3.7623173000029055,
+          "query_seconds": 1.7514071998302825,
+          "filtered_seconds": 0.7591463998687686,
+          "unfiltered_seconds": 0.9922607999615138,
+          "memory_peak_bytes": 37040128,
+          "data_device_wbytes": 13828096,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=273 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 2,
+          "write_seconds": 3.468780600000173,
+          "query_seconds": 1.795841899845982,
+          "filtered_seconds": 0.7956930997606833,
+          "unfiltered_seconds": 1.0001488000852987,
+          "memory_peak_bytes": 36843520,
+          "data_device_wbytes": 6643712,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6643712 rios=0 wios=211 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 2,
+          "write_seconds": 3.575885999991442,
+          "query_seconds": 1.9811229999904754,
+          "filtered_seconds": 0.8656075998587767,
+          "unfiltered_seconds": 1.1155154001316987,
+          "memory_peak_bytes": 37044224,
+          "data_device_wbytes": 13828096,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=273 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 3,
+          "write_seconds": 3.8427057999942917,
+          "query_seconds": 1.9072484999633161,
+          "filtered_seconds": 0.8300124998349929,
+          "unfiltered_seconds": 1.0772360001283232,
+          "memory_peak_bytes": 37007360,
+          "data_device_wbytes": 6643712,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6643712 rios=0 wios=211 dbytes=0 dios=0"
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 3,
+          "write_seconds": 3.8757058000046527,
+          "query_seconds": 1.852194299979601,
+          "filtered_seconds": 0.7997106000111671,
+          "unfiltered_seconds": 1.052483699968434,
+          "memory_peak_bytes": 37953536,
+          "data_device_wbytes": 13828096,
+          "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=13828096 rios=0 wios=273 dbytes=0 dios=0"
+        }
+      ],
+      "medians": {
+        "minivectordb:filter-budget": {
+          "write_seconds": 3.8427057999942917,
+          "query_seconds": 1.9072484999633161,
+          "filtered_seconds": 0.8300124998349929,
+          "unfiltered_seconds": 1.0555285999435,
+          "memory_peak_bytes": 37007360,
+          "data_device_wbytes": 6643712
+        },
+        "minivectordb:perf-r5c": {
+          "write_seconds": 3.7623173000029055,
+          "query_seconds": 1.852194299979601,
+          "filtered_seconds": 0.7997106000111671,
+          "unfiltered_seconds": 1.052483699968434,
+          "memory_peak_bytes": 37044224,
+          "data_device_wbytes": 13828096
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Fixed seed and one data distribution per scenario; no cold-cache control.",
+    "The local driver includes Docker Desktop pipe and host-side SQL construction; it is not official T.",
+    "The test branch is not merged into the formal branch; the formal branch remains at 0791cba5c.",
+    "io.stat device attribution and full writeback are not verified; these values are not official B or E."
+  ]
+}
