@@ -40,5 +40,13 @@
     "Fixed single run per image for the update/delete cycles; the delete difference is within noise.",
     "The update path is not part of the insert-only official performance workload, so this is not an E claim.",
     "Rollback invalidates the table and rebuilds the snapshot; commit keeps the patch."
-  ]
+  ],
+  "scale_100k": {
+    "rows": 100000,
+    "dimensions": 128,
+    "update_cycles": 10,
+    "previous_seconds": 26.651687321998907,
+    "candidate_seconds": 12.588492327000495,
+    "note": "10 cycles of updating 100 vectors plus one filtered TopK; the 51 MB snapshot uses the mapped-file path. The patch scans 100,000 keys per statement (~1 ms) instead of rebuilding the snapshot."
+  }
 }
