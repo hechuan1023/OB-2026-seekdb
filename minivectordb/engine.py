@@ -10,13 +10,14 @@ from array import array
 from dataclasses import dataclass
 
 from .errors import DBError, require
+from .native import parse_vector
 from .sorting import Descending, Sorter, file_rows
 from .sql import parse
 from .storage import Storage, write_record
 from .vector_index import VectorIndexes
 
 
-def convert(literal, column):
+def convert(literal, column, native=True):
     name, typ, size = column
     if typ == 'BIGINT':
         require(literal.kind == 'number' and re.fullmatch(r'[+-]?\d+', literal.value), 'TYPE_ERROR', f'{name} requires BIGINT')
@@ -30,6 +31,12 @@ def convert(literal, column):
         require(len(literal.value) <= size, 'TYPE_ERROR', f'{name} exceeds VARCHAR({size})')
         return literal.value
     try:
+        # The native path accepts only the JSON number grammar and returns None
+        # for everything else, so the Python path below keeps the exact
+        # accepted language and error messages.
+        result = parse_vector(literal.value, size) if native else None
+        if result is not None:
+            return result
         values = json.loads(literal.value)
         if not isinstance(values, list) or len(values) != size:
             raise ValueError('Vector dimension mismatch')
@@ -67,6 +74,7 @@ class Engine:
         self.statement_changes = {}
         self.sort_memory = sort_memory
         self.mode = mode  # Both modes currently use the exact flat search path.
+        self.native = native
         self.vector_indexes = VectorIndexes(self.storage, sort_memory, native)
 
     def close(self):
@@ -187,7 +195,7 @@ class Engine:
         positions = [columns.index(name) for name in names]
         for values in rows:
             require(len(values) == len(names), 'TYPE_ERROR', 'Wrong number of values')
-            row = tuple(convert(values[positions[i]], col) for i, col in enumerate(schema['columns']))
+            row = tuple(convert(values[positions[i]], col, self.native) for i, col in enumerate(schema['columns']))
             key = row[schema['pk']]
             require(self.storage.get(schema['id'], key) is None, 'CONSTRAINT_ERROR', 'Duplicate primary key')
             self.storage.append(('row', schema['id'], key, row))
@@ -204,7 +212,7 @@ class Engine:
                 require(literal.kind == 'string', 'TYPE_ERROR', f'{name} requires a string literal')
                 value = literal.value
             else:
-                value = convert(literal, column)
+                value = convert(literal, column, self.native)
             bound.append((i, op, value))
         return bound
 
@@ -237,7 +245,7 @@ class Engine:
             require(i != schema['pk'], 'UNSUPPORTED', 'Primary key updates are unsupported')
             require(i not in used, 'CONSTRAINT_ERROR', 'Repeated assignment')
             used.add(i)
-            updates.append((i, convert(literal, schema['columns'][i])))
+            updates.append((i, convert(literal, schema['columns'][i], self.native)))
         return self.modify(schema, self.conditions(schema, where), updates)
 
     def delete(self, table, where):
@@ -275,7 +283,7 @@ class Engine:
         require(expression[0] == 'distance', 'UNSUPPORTED', 'Unsupported expression')
         i = self.column(schema, expression[1])
         require(schema['columns'][i][1] == 'VECTOR', 'TYPE_ERROR', 'L2_DISTANCE requires VECTOR')
-        vector = convert(expression[2], schema['columns'][i])
+        vector = convert(expression[2], schema['columns'][i], self.native)
         return ('distance', i, tuple(vector))
 
     @staticmethod

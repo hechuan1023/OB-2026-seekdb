@@ -1,0 +1,241 @@
+{
+  "scope": "Local JSONL correctness and wall-clock comparison; not the official benchmark.",
+  "date": "2026-11-10",
+  "images": {
+    "final": "sha256:3b5e7eb1ba0acc8e0a9bfb74d4496cb5c87d5b874971ffebd4518bfb66a98c46",
+    "previous": "sha256:e969b03742e19f09bde5e38ed26626d7f7c71f1f3849b411653df0e8722f06ee"
+  },
+  "source_sha256": {
+    "minivectordb/native.py": "9294fed233b17adb0468dfc8fae5dfaac3f0e9d5c205027df92eb94a69855db5",
+    "minivectordb/engine.py": "2f05f7cb91395f828c68777c3679ad9b9289608d75638d18110f0e521bf8a358",
+    "minivectordb/json_protocol.py": "a3f2c37c4b1cbef315e8be7e575767c1cbcd8c868006e7975a6fe450c55f8a57",
+    "native/exact.cpp": "f945884fa1dedc225fdd3146fd386218d583cfac32a52d299505b72d33e8da8a",
+    "tests/test_vector_index.py": "8c4ebefb52b1a06ecbadcc818077dffaf82dc7a78e0cace367df3f8cb5977b6a"
+  },
+  "seed": 20261110,
+  "rows": 10000,
+  "dimensions": 128,
+  "k": 10,
+  "engine_write_seconds": {
+    "note": "Pre-built SQL, Engine.execute only, 100 batches of 100 rows; two runs per image.",
+    "perf-r4b": [
+      1.0276901459999976,
+      0.9901026219999949
+    ],
+    "perf-r5": [
+      0.7064174669999943,
+      0.740781443000003
+    ]
+  },
+  "write_paired_final": {
+    "groups": 5,
+    "queries": 2,
+    "images": [
+      "minivectordb:perf-r5c",
+      "minivectordb:perf-r4b"
+    ],
+    "rounds": [
+      {
+        "image": "minivectordb:perf-r5c",
+        "round": 1,
+        "write_seconds": 3.0976044999988517,
+        "query_seconds": 0.022647400008281693,
+        "filtered_seconds": 0.020362700000987388,
+        "unfiltered_seconds": 0.0022847000072943047,
+        "memory_peak_bytes": 36769792
+      },
+      {
+        "image": "minivectordb:perf-r4b",
+        "round": 1,
+        "write_seconds": 4.16555750000407,
+        "query_seconds": 0.023215600012918003,
+        "filtered_seconds": 0.019898600003216416,
+        "unfiltered_seconds": 0.0033170000097015873,
+        "memory_peak_bytes": 36945920
+      },
+      {
+        "image": "minivectordb:perf-r5c",
+        "round": 2,
+        "write_seconds": 3.6288420999917435,
+        "query_seconds": 0.02673349999531638,
+        "filtered_seconds": 0.023182599994470365,
+        "unfiltered_seconds": 0.0035509000008460134,
+        "memory_peak_bytes": 38395904
+      },
+      {
+        "image": "minivectordb:perf-r4b",
+        "round": 2,
+        "write_seconds": 4.172913699992932,
+        "query_seconds": 0.02639340001042001,
+        "filtered_seconds": 0.022763400003896095,
+        "unfiltered_seconds": 0.0036300000065239146,
+        "memory_peak_bytes": 36745216
+      },
+      {
+        "image": "minivectordb:perf-r5c",
+        "round": 3,
+        "write_seconds": 3.4647705999959726,
+        "query_seconds": 0.02270660000795033,
+        "filtered_seconds": 0.01886160000867676,
+        "unfiltered_seconds": 0.0038449999992735684,
+        "memory_peak_bytes": 36794368
+      },
+      {
+        "image": "minivectordb:perf-r4b",
+        "round": 3,
+        "write_seconds": 4.029409399998258,
+        "query_seconds": 0.024034299989580177,
+        "filtered_seconds": 0.020732399992994033,
+        "unfiltered_seconds": 0.003301899996586144,
+        "memory_peak_bytes": 36704256
+      },
+      {
+        "image": "minivectordb:perf-r5c",
+        "round": 4,
+        "write_seconds": 3.798597900007735,
+        "query_seconds": 0.022773299991968088,
+        "filtered_seconds": 0.01989139999204781,
+        "unfiltered_seconds": 0.002881899999920279,
+        "memory_peak_bytes": 36790272
+      },
+      {
+        "image": "minivectordb:perf-r4b",
+        "round": 4,
+        "write_seconds": 3.005063499993412,
+        "query_seconds": 0.026419699992402457,
+        "filtered_seconds": 0.023385899999993853,
+        "unfiltered_seconds": 0.0030337999924086034,
+        "memory_peak_bytes": 36958208
+      },
+      {
+        "image": "minivectordb:perf-r5c",
+        "round": 5,
+        "write_seconds": 3.2480815000017174,
+        "query_seconds": 0.022016999995685183,
+        "filtered_seconds": 0.019282299996120855,
+        "unfiltered_seconds": 0.0027346999995643273,
+        "memory_peak_bytes": 36704256
+      },
+      {
+        "image": "minivectordb:perf-r4b",
+        "round": 5,
+        "write_seconds": 3.616312599988305,
+        "query_seconds": 0.021583499998087063,
+        "filtered_seconds": 0.019108199994661845,
+        "unfiltered_seconds": 0.002475300003425218,
+        "memory_peak_bytes": 37302272
+      }
+    ],
+    "medians": {
+      "minivectordb:perf-r5c": {
+        "write_seconds": 3.4647705999959726,
+        "query_seconds": 0.02270660000795033,
+        "filtered_seconds": 0.01989139999204781,
+        "unfiltered_seconds": 0.002881899999920279,
+        "memory_peak_bytes": 36790272
+      },
+      "minivectordb:perf-r4b": {
+        "write_seconds": 4.029409399998258,
+        "query_seconds": 0.024034299989580177,
+        "filtered_seconds": 0.020732399992994033,
+        "unfiltered_seconds": 0.003301899996586144,
+        "memory_peak_bytes": 36945920
+      }
+    }
+  },
+  "query_paired_final": {
+    "groups": 5,
+    "queries": 1000,
+    "images": [
+      "minivectordb:perf-r5c",
+      "minivectordb:perf-r4b"
+    ],
+    "rounds": [
+      {
+        "image": "minivectordb:perf-r5c",
+        "round": 1,
+        "write_seconds": 3.6122300999995787,
+        "query_seconds": 2.077034699745127,
+        "filtered_seconds": 0.997132999720634,
+        "unfiltered_seconds": 1.079901700024493,
+        "memory_peak_bytes": 36888576
+      },
+      {
+        "image": "minivectordb:perf-r4b",
+        "round": 1,
+        "write_seconds": 3.6779498999967473,
+        "query_seconds": 2.5928327999426983,
+        "filtered_seconds": 1.2208067999454215,
+        "unfiltered_seconds": 1.3720259999972768,
+        "memory_peak_bytes": 36577280
+      },
+      {
+        "image": "minivectordb:perf-r5c",
+        "round": 2,
+        "write_seconds": 3.226895899992087,
+        "query_seconds": 3.1453024003858445,
+        "filtered_seconds": 1.4332194000744494,
+        "unfiltered_seconds": 1.7120830003113952,
+        "memory_peak_bytes": 36831232
+      },
+      {
+        "image": "minivectordb:perf-r4b",
+        "round": 2,
+        "write_seconds": 4.600001800004975,
+        "query_seconds": 2.697151199885411,
+        "filtered_seconds": 1.275537199966493,
+        "unfiltered_seconds": 1.4216139999189181,
+        "memory_peak_bytes": 36880384
+      },
+      {
+        "image": "minivectordb:perf-r5c",
+        "round": 3,
+        "write_seconds": 3.825591799992253,
+        "query_seconds": 2.786969900203985,
+        "filtered_seconds": 1.303679500342696,
+        "unfiltered_seconds": 1.4832903998612892,
+        "memory_peak_bytes": 37769216
+      },
+      {
+        "image": "minivectordb:perf-r4b",
+        "round": 3,
+        "write_seconds": 4.466599099992891,
+        "query_seconds": 2.595628400100395,
+        "filtered_seconds": 1.2335792999656405,
+        "unfiltered_seconds": 1.3620491001347546,
+        "memory_peak_bytes": 36564992
+      }
+    ],
+    "medians": {
+      "minivectordb:perf-r5c": {
+        "write_seconds": 3.6122300999995787,
+        "query_seconds": 2.786969900203985,
+        "filtered_seconds": 1.303679500342696,
+        "unfiltered_seconds": 1.4832903998612892,
+        "memory_peak_bytes": 36888576
+      },
+      "minivectordb:perf-r4b": {
+        "write_seconds": 4.466599099992891,
+        "query_seconds": 2.595628400100395,
+        "filtered_seconds": 1.2335792999656405,
+        "unfiltered_seconds": 1.3720259999972768,
+        "memory_peak_bytes": 36577280
+      }
+    }
+  },
+  "pressure_64mib": {
+    "rows": 18000,
+    "dimensions": 1024,
+    "vector_bytes": 73728000,
+    "memory_peak_bytes": 67108864,
+    "elapsed_seconds": 81.862653465,
+    "oom": "0",
+    "oom_kill": "0"
+  },
+  "limitations": [
+    "Fixed seed and one data distribution; no cold-cache control.",
+    "End-to-end write timing includes host-side SQL construction (~1.2 s) and driver overhead, so it is not the official write T.",
+    "The query-side difference is below the local Docker Desktop pipe and round noise; no query improvement is claimed.",
+    "io.stat device attribution and full writeback are not verified; these values are not official B or E."
+  ]
+}

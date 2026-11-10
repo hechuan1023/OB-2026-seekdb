@@ -1,8 +1,11 @@
 // Self-contained exact flat-search kernel. No third-party vector index library.
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <vector>
 
 #ifdef _WIN32
@@ -52,6 +55,83 @@ distance_squared(const float *__restrict v, const float *__restrict query,
     acc[j & 7] += delta * delta;
   }
   return acc[0] + acc[1] + acc[2] + acc[3] + acc[4] + acc[5] + acc[6] + acc[7];
+}
+
+static inline bool json_space(char c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+static inline bool json_digit(char c) { return c >= '0' && c <= '9'; }
+
+// Strict parser for a JSON array of finite numbers, used to avoid building 128
+// Python float objects per vector. It accepts exactly the JSON number grammar
+// and returns -1 for anything else, including NaN/Infinity, leading zeros,
+// trailing text and float32 overflow. Callers then use Python's json module, so
+// the accepted language and error semantics stay identical.
+MV_EXPORT std::int64_t mv_parse_vector(const char *text, std::size_t length,
+                                       float *out, std::size_t capacity) {
+  if (!text || !out) return -1;
+  const char *p = text, *end = text + length;
+  while (p < end && json_space(*p)) ++p;
+  if (p == end || *p != '[') return -1;
+  ++p;
+  while (p < end && json_space(*p)) ++p;
+  std::size_t count = 0;
+  if (p < end && *p == ']') {
+    ++p;
+    while (p < end && json_space(*p)) ++p;
+    return p == end ? 0 : -1;
+  }
+  for (;;) {
+    const char *start = p;
+    if (p < end && *p == '-') ++p;
+    if (p == end || !json_digit(*p)) return -1;
+    if (*p == '0') {
+      ++p;
+      if (p < end && json_digit(*p)) return -1;  // JSON forbids leading zeros
+    } else {
+      while (p < end && json_digit(*p)) ++p;
+    }
+    if (p < end && *p == '.') {
+      ++p;
+      if (p == end || !json_digit(*p)) return -1;
+      while (p < end && json_digit(*p)) ++p;
+    }
+    if (p < end && (*p == 'e' || *p == 'E')) {
+      ++p;
+      if (p < end && (*p == '+' || *p == '-')) ++p;
+      if (p == end || !json_digit(*p)) return -1;
+      while (p < end && json_digit(*p)) ++p;
+    }
+    if (count == capacity) return -1;
+    char buffer[512];
+    const std::size_t token = static_cast<std::size_t>(p - start);
+    if (token >= sizeof(buffer)) return -1;
+    std::memcpy(buffer, start, token);
+    buffer[token] = '\0';
+    char *parsed_end = nullptr;
+    // The grammar check above already restricted the token to a JSON number;
+    // strtod then applies the same round-to-nearest double conversion as json.
+    const double value = std::strtod(buffer, &parsed_end);
+    if (parsed_end != buffer + token) return -1;
+    const float narrowed = static_cast<float>(value);
+    if (!std::isfinite(narrowed)) return -1;  // Let Python raise INVALID_VECTOR
+    out[count++] = narrowed;
+    while (p < end && json_space(*p)) ++p;
+    if (p == end) return -1;
+    if (*p == ',') {
+      ++p;
+      while (p < end && json_space(*p)) ++p;
+      continue;
+    }
+    if (*p == ']') {
+      ++p;
+      break;
+    }
+    return -1;
+  }
+  while (p < end && json_space(*p)) ++p;
+  return p == end ? static_cast<std::int64_t>(count) : -1;
 }
 
 MV_EXPORT int mv_abi_version() { return 1; }

@@ -42,19 +42,24 @@ def serve(engine, input_stream, output):
             engine.mode = mode
             value = engine.execute_statement(parse(sql))
             if isinstance(value, QueryResult):
-                # Stream rows instead of retaining the whole result in memory.
+                # Stream rows in bounded chunks instead of retaining the whole
+                # result; with unbuffered stdout this also avoids one syscall
+                # per row on large results.
                 output.write('{"id":' + _json(ident) + ',"ok":true,"columns":' +
                              _json(value.columns) + ',"rows":[')
                 first = True
+                chunk = []
                 try:
                     for row in value.rows:
-                        if not first:
-                            output.write(',')
-                        output.write(_json(row))
+                        chunk.append(('' if first else ',') + _json(row))
                         first = False
+                        if len(chunk) >= 64:
+                            output.write(''.join(chunk))
+                            chunk.clear()
                 finally:
                     value.rows.close()
-                output.write(']}\n')
+                chunk.append(']}\n')
+                output.write(''.join(chunk))
                 output.flush()
             else:
                 _emit(output, {'id': ident, 'ok': True, 'affected_rows': value})

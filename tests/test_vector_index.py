@@ -1,9 +1,11 @@
 import io
+import json
 import math
 import random
 import tempfile
 import tracemalloc
 import unittest
+from array import array
 from pathlib import Path
 
 from minivectordb.engine import Engine
@@ -288,6 +290,32 @@ class StatementScannerTests(unittest.TestCase):
                 self.assertTrue(math.isfinite(result[1]) and result[1] > 0)
             finally:
                 db.close()
+
+
+class NativeParserTests(unittest.TestCase):
+    def setUp(self):
+        from minivectordb.native import parse_vector
+        self.parse_vector = parse_vector
+        if parse_vector('[0,0]', 2) is None:
+            self.skipTest('Native parser not built')
+
+    def test_matches_python_json_for_valid_vectors(self):
+        rng = random.Random(311)
+        for _ in range(200):
+            size = rng.randint(1, 32)
+            values = [rng.uniform(-1e6, 1e6) for _ in range(size)]
+            text = json.dumps(values, separators=(',', ':'))
+            self.assertEqual(self.parse_vector(text, size), array('f', json.loads(text)))
+        for text, size in (('[0]', 1), ('[ -0.0 , 1e-45 ]', 2), ('[16777217,3.4028235e38]', 2),
+                           ('[1,2,3]', 3), ('\t[1,\n2]\r', 2)):
+            self.assertEqual(self.parse_vector(text, size), array('f', json.loads(text)))
+
+    def test_rejects_non_json_numbers_and_falls_back(self):
+        for text, size in (('[01]', 1), ('[.5]', 1), ('[1.]', 1), ('[+1]', 1), ('[1e]', 1),
+                           ('[1e400]', 1), ('[NaN]', 1), ('[Infinity]', 1), ('[true]', 1),
+                           ('[1,]', 1), ('[1]x', 1), ('1', 1), ('[]', 1), ('[1,2]', 1),
+                           ('[1,2]', 3), ('["1"]', 1)):
+            self.assertIsNone(self.parse_vector(text, size), text)
 
 
 class NativeMemoryTests(unittest.TestCase):
