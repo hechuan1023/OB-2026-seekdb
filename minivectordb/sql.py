@@ -1,12 +1,11 @@
 """SQL subset parser. Wire-protocol decisions are intentionally kept elsewhere."""
 import re
-from dataclasses import dataclass
+from typing import NamedTuple
 
 from .errors import DBError, require
 
 
-@dataclass(frozen=True)
-class Literal:
+class Literal(NamedTuple):
     kind: str
     value: str
 
