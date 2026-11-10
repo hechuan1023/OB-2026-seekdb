@@ -377,6 +377,86 @@
           "data_device_wbytes": 6627328
         }
       }
+    },
+    "5_swapped_seed_20261111": {
+      "groups": 5,
+      "queries": 1000,
+      "images": [
+        "minivectordb:perf-r5c",
+        "minivectordb:insert-hoist"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 1,
+          "query_seconds": 1.975294299860252,
+          "filtered_seconds": 0.9433858002594206,
+          "unfiltered_seconds": 1.0319084996008314,
+          "memory_peak_bytes": 36843520,
+          "data_device_wbytes": 13811712
+        },
+        {
+          "image": "minivectordb:insert-hoist",
+          "round": 1,
+          "query_seconds": 1.9249428001057822,
+          "filtered_seconds": 0.9042468000261579,
+          "unfiltered_seconds": 1.0206960000796244,
+          "memory_peak_bytes": 36855808,
+          "data_device_wbytes": 6627328
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 2,
+          "query_seconds": 2.1938926004513633,
+          "filtered_seconds": 1.0522671999642625,
+          "unfiltered_seconds": 1.1416254004871007,
+          "memory_peak_bytes": 37007360,
+          "data_device_wbytes": 13811712
+        },
+        {
+          "image": "minivectordb:insert-hoist",
+          "round": 2,
+          "query_seconds": 1.9177322004106827,
+          "filtered_seconds": 0.9213760001875926,
+          "unfiltered_seconds": 0.9963562002230901,
+          "memory_peak_bytes": 36716544,
+          "data_device_wbytes": 6627328
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 3,
+          "query_seconds": 1.9336181994876824,
+          "filtered_seconds": 0.916977599816164,
+          "unfiltered_seconds": 1.0166405996715184,
+          "memory_peak_bytes": 36847616,
+          "data_device_wbytes": 13811712
+        },
+        {
+          "image": "minivectordb:insert-hoist",
+          "round": 3,
+          "query_seconds": 1.8606809003395028,
+          "filtered_seconds": 0.8756187999388203,
+          "unfiltered_seconds": 0.9850621004006825,
+          "memory_peak_bytes": 36798464,
+          "data_device_wbytes": 6627328
+        }
+      ],
+      "medians": {
+        "minivectordb:perf-r5c": {
+          "query_seconds": 1.975294299860252,
+          "filtered_seconds": 0.9433858002594206,
+          "unfiltered_seconds": 1.0319084996008314,
+          "memory_peak_bytes": 36847616,
+          "data_device_wbytes": 13811712
+        },
+        "minivectordb:insert-hoist": {
+          "query_seconds": 1.9177322004106827,
+          "filtered_seconds": 0.9042468000261579,
+          "unfiltered_seconds": 0.9963562002230901,
+          "memory_peak_bytes": 36798464,
+          "data_device_wbytes": 6627328
+        }
+      }
     }
   },
   "limitations": [
@@ -385,5 +465,32 @@
     "The test branch is not merged into the formal branch; the formal branch remains at 0791cba5c.",
     "io.stat device attribution and full writeback are not verified; these values are not official B or E."
   ],
-  "order_bias": "The paired driver runs the candidate image first in each round. Swapping the order changes the direction: 600 values original 1.852 -> 1.907 s vs swapped 1.907 -> 1.862 s; 5 values swapped 2.175 -> 2.092 s. End-to-end differences are order-sensitive; engine-level timings and io.stat counts are not."
+  "order_bias": "The paired driver runs the candidate image first in each round. Swapping the order changes the direction: 600 values original 1.852 -> 1.907 s vs swapped 1.907 -> 1.862 s; 5 values swapped 2.175 -> 2.092 s. End-to-end differences are order-sensitive; engine-level timings and io.stat counts are not.",
+  "five_value_multiseed": {
+    "seeds": [
+      20261110,
+      20261111
+    ],
+    "note": "Swapped order (formal first), 1,000 queries, 10,000 x 128, 5 filter values.",
+    "total_query_seconds": {
+      "20261110": [
+        2.175,
+        2.092
+      ],
+      "20261111": [
+        1.975,
+        1.918
+      ]
+    },
+    "filtered_seconds": {
+      "20261110": [
+        1.029,
+        0.985
+      ],
+      "20261111": [
+        0.943,
+        0.904
+      ]
+    }
+  }
 }
