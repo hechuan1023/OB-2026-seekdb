@@ -24,7 +24,7 @@
     "tests/container_benchmark.py": "6ae0b8288f2e8c991d5d4e7146bbcb3087e29161d1762a09dbf779de159f839d",
     "tests/container_resource_probe.py": "df77d2ea3977736d049eb5a068495a7c1a7e4ffc1161bda360128d538a6a7345",
     "tests/container_vector_pressure.py": "dc5393fc9b9f4643683a8c4feb68b00f885ad10e3cf7aa59dc0ccd762345f2ca",
-    "tests/docker_validation.py": "50af8de7ffec16b110d7ae0a112fffa5a0ed2ba1c6ad545036ded1e070e31351",
+    "tests/docker_validation.py": "40f374cc164577ba93f81cbe60fb4c43f5ddc50df579a0b085092916962d81e6",
     "tests/jsonl_benchmark.py": "96de03a2eda98ad50cb902608f71722528b51202dd0ecea8230027f882c561c9",
     "tests/jsonl_benchmark_v1.py": "2c9bfd319a71768adbb212a15151fb96a95028d80753b3d84ddfb8420d8c6878",
     "tests/measure_entry.py": "766ea4aef39765f461e02cc3ffc9a0a45be64de55d90ff500843d128389f4405",

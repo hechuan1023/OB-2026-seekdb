@@ -26,7 +26,7 @@ class DockerClient(Client):
             'docker', 'run', '-i', '--name', name, '--network', 'none',
             '--cpus=2', '--memory=64m', '--memory-swap=64m',
             '-v', f'{volume}:/data', image,
-            '--data-dir', '/data', '--cache-memory-mib', '1'],
+            '--data-dir', '/data', '--cache-memory-mib', '1', '--wire', 'sql'],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding='utf-8', bufsize=1)
         self.lines, self.stderr = queue.Queue(), []
