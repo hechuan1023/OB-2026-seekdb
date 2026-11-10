@@ -61,11 +61,11 @@ docker run --rm --network none --cpus=2 --memory=256m --memory-swap=256m \
   --entrypoint python minivectordb:cross-review -m tests.run_public_cases --output /results/public.json
 ```
 
-## 3. 仓库自测套件（tests/，106 项）
+## 3. 仓库自测套件（tests/，提交版本 106 项；当前工作区 108 项，含 2 项未提交的谓词/深嵌套修复测试）
 
 `python -m unittest discover -v`；无第三方依赖；原生内核缺失时自动跳过原生路径（跳过不能记为原生通过）。构成：引擎与 SQL 语义（`test_engine.py`）、向量索引与生命周期（`test_vector_index.py`、`test_index_lifecycle.py`）、恢复与协议（`test_recovery.py`，含提交中断、逐字节 WAL 尾部、恢复中再终止、checkpoint 替换前后终止）、题包适配与防误判（`test_public_cases.py`、`test_public_adapter.py`）、内存探针（`test_memory.py`）。另有容器级驱动：`docker_validation.py`（真实入口 SIGKILL/EOF/SIGTERM/同卷）、`container_vector_pressure.py`（18,000×1024 维 / 64 MiB）、`container_benchmark.py`（三轮 T/B/M 形状测量）。
 
-## 4. 独立交叉验证组（tests_cross/，六组）
+## 4. 独立交叉验证组（tests_cross/，八组）
 
 均为自带最小管道客户端，不 import 被测仓库的测试工具；真值独立建立（float32 用 `struct.pack/unpack('f')`，距离用 Python `math.dist`，排序键 `(distance, primary_key)`），不复用被测实现的距离、过滤或排序函数。
 
@@ -201,7 +201,99 @@ docker run --rm --network none --cpus=2 --memory=64m --memory-swap=64m \
 
 说明：官方 95 条为权威计数（manifest 声明并经脚本逐文件核对）；套件与独立组为实测值，因随机种子与循环生成而每次运行略有差异。p0/p1 的语句数较少是因为其检查以"重启后核对"为主，一条语句配多次状态验证。
 
-## 6. 覆盖边界（本总览不作结论的范围）
+## 7. 官方要求 → 测试覆盖对照
+
+依据官方赛题页（2026-11-10 核对，见 `docs/minivectordb-requirements.md` 顶部注记）。状态：✅ 已覆盖并有通过记录；◐ 本地可验证部分已覆盖，正式部分待题包；✗ 未完成；— 不适用。
+
+### 7.1 功能范围（必须支持）
+
+| 官方要求 | 覆盖位置 | 状态 |
+| --- | --- | --- |
+| CREATE TABLE；BIGINT/VARCHAR(n)/VECTOR(n)；一个 BIGINT 主键；每表最多一个向量列 | `tests/test_engine.py`（DDL 约束）、P2 S2e1–S2e14、P4 A1、公开 sql_crud | ✅ |
+| INSERT 单行/多行 | 公开 sql_crud / transaction_failed_insert、P0-1、P2 S2h、P3 随机插入 | ✅ |
+| SELECT 普通列投影、SELECT * | 公开 sql_crud、P2 S3d3（列序）、P4 A | ✅ |
+| UPDATE/DELETE 按主键或条件 | 公开 storage_mutations、P0-1、P2 S2i、P3 | ✅ |
+| WHERE `=`、`<`、`<=`、`>`、`>=`、AND | 公开 sql_comparisons、P2 S2c3 / S2d9–11、P6 TX-07 过滤集合 | ✅ |
+| ORDER BY、LIMIT | 公开 sql_ordering、P2 S4c3 / S4e3、P4 A3/A4 | ✅ |
+| L2_DISTANCE 返回欧氏距离 | 公开 vector_euclidean（[3,4]→5）、P2 S3c3、P5 距离逐条核对 | ✅ |
+| 精确 TopK | 公开 vector_ties_and_filter、P0-2 D、P5 exact 300 查询 | ✅ |
+| 带普通列过滤的 TopK（先过滤后 TopK） | 公开 vector_ties_and_filter、P0-2 B、P5 过滤组、P6 TX-07 | ✅ |
+| CREATE VECTOR INDEX 语法；建索引后增删改正确反映 | 公开 vector_index_maintenance、P0-2 B8–B10、P5 VEC-07 交错维护、P4 G 多表索引 | ✅ |
+| 持久化：表定义与数据；重启一致 | 公开 storage_restart / mutations / multiple_tables、P0-1、P3、P4 A15 | ✅ |
+| 事务 BEGIN/COMMIT/ROLLBACK；读自身修改；表与向量一致 | 公开 transaction_*、P0-1、P0-2 C、P6 TX-01–TX-07 | ✅ |
+| 恢复：异常退出后恢复；确认提交不丢；未提交不部分生效 | P0-1、P1 T1–T6、P3 强杀分支、公开 transaction_shutdown_rollback | ✅ |
+
+### 7.2 明确不要求（但必须报约定错误）
+
+| 官方要求 | 覆盖位置 | 状态 |
+| --- | --- | --- |
+| NULL、JOIN、聚合、子查询、ALTER TABLE、外键、嵌套事务、主键更新 | 公开 sql_unsupported、P2 S2d9–S2d20（OR/IN/NOT/聚合/JOIN/NULL/主键更新/重复赋值/别名规则）、P0-2 H6 | ✅ |
+
+### 7.3 语义细节
+
+| 官方要求 | 覆盖位置 | 状态 |
+| --- | --- | --- |
+| 主键不可重复 | 公开 sql_primary_key、P0-1、P2 S2h、P3 | ✅ |
+| VARCHAR 按 Unicode 字符数计长 | P2 S2b、P4 B（组合字符 / ZWJ 表情 / 满长往返） | ✅ |
+| 字符串比较按 Unicode 码点顺序 | P2 S2c、P4 A3 | ✅ |
+| 向量固定维度 float32；拒绝 NaN/Infinity/维度不符/转换溢出 | P2 S2d3（11 种非法输入）、P0-2 F3、P4 | ✅ |
+| 距离按存储后的向量计算 | 公开 vector_float32、P2 F1 / S3c3、P5 距离核对 | ✅ |
+| 过滤 TopK 必须在 WHERE 集合内计算 | 公开 vector_ties_and_filter、P0-2 B、P5 | ✅ |
+| 不足 K 返回全部；空集合返回空 | P0-2 E2/E3、P4 C6、P5 Recall 分母 min(K,N) | ✅ |
+| 距离并列按主键升序 | 公开 vector_ties_and_filter、P0-2 E1、P4 A9（负主键并列）、P5 顺序核对 | ✅ |
+| 普通 ORDER BY 并列按主键升序 | P0-2 E7/E8、P2 S4d3/d4 | ✅ |
+| 未指定 ORDER BY 按集合比较 | 公开用例 unordered 断言、P2 S2c3 排序后比较 | ✅ |
+| exact 默认；建索引后 exact 仍精确 | P5 exact 阶段、P4 F、公开 vector_index_maintenance | ✅ |
+| ann 模式针对向量 TopK | 公开 `--mode ann`、P4 F、P5 ann 阶段 | ✅ |
+| 两组平均 Recall@10 分别 ≥0.95 | P5（实测 1.0 / 1.0） | ✅ |
+
+### 7.4 存储、事务与恢复
+
+| 官方要求 | 覆盖位置 | 状态 |
+| --- | --- | --- |
+| 数据/恢复文件统一在 /data；每用例独立目录 | P6 目录检查、容器 `TMPDIR=/data`、全部测试独立临时目录 | ✅ |
+| 超内存数据不能全量载入 | `container_vector_pressure`（18,000×1024 维，73.7MB > 64MiB，`oom_kill=0`） | ✅ |
+| 自动提交 | P6 TX-01、公开 transaction_autocommit_atomic | ✅ |
+| 语句失败无部分修改；之前成功语句仍可提交或回滚 | 公开 transaction_failed_insert、P0-1、P6 TX-03 / TX-04 双分支 | ✅ |
+| ROLLBACK 恢复内容、可见集合与向量检索 | P6 TX-05（TopK 与基线逐项一致）、P0-2 C | ✅ |
+| COMMIT 成功响应前完成持久化 | P0-1（响应后 4.6ms 强杀）、P1 T2/T2b、P6 TX-06 | ✅ |
+| 崩溃模型四态（确认保留 / 未发回滚 / 未确认二选一 / 自动提交同规则） | P1 T1–T3、P0-1 四分支 | ✅ |
+| 索引重建完成前不得报告就绪 | P6 READY 时序（`during_vector_rebuild` 中断时从未输出 READY） | ✅ |
+| 索引可从持久化记录重建 | P5 / P6 删除 `flat-*` 后重启 | ✅ |
+| 恢复途中再次终止仍正确 | P1 T4（连续两次强杀 + 第三次启动） | ✅ |
+
+### 7.5 运行协议与容器
+
+| 官方要求 | 覆盖位置 | 状态 |
+| --- | --- | --- |
+| stdin/stdout；stderr 日志；及时 flush | P6 协议检查（50 条同 PID、stdout 仅协议行、stderr 空、响应 <2s）、P2 S1 | ✅ |
+| 同一进程连续处理多条语句与事务 | P6 PID 检查、P0-2 模式切换不换进程 | ✅ |
+| 不启动网络监听 | 容器以 `--network none` 运行全部测试（未主动探测监听端口） | ◐ |
+| Dockerfile 从源码构建；运行禁网 | 镜像 `minivectordb:cross-review` 多阶段构建成功；容器 `--network none` | ✅ |
+| 正常关闭回滚未提交事务 | 公开 transaction_shutdown_rollback、`docker_validation` EOF、P3 EOF 分支 | ✅ |
+| 强制终止后恢复 | `docker_validation` SIGKILL、P0-1、P1、P3 | ✅ |
+| 语句边界/结果格式/错误码/就绪/模式切换/退出方式以题包为准 | 本地临时协议已实现并测试；官方驱动未公布 | ◐ |
+
+### 7.6 评分与提交
+
+| 官方要求 | 覆盖位置 | 状态 |
+| --- | --- | --- |
+| 功能准入：全部正式用例通过才计分 | 公开 20 组/95 SQL 双路径通过；正式 29 用例与隐藏 9 例未提供 | ◐ |
+| 性能 benchmark 形状（10,000×128、1,000 查询、K=10、一半过滤、每批 100 条提交） | `tests/benchmark.py`、P5（5,000×128 缩小版）、`tests/container_benchmark.py` | ✅ |
+| 两组平均 Recall@10 ≥0.95 | P5 实测 1.0 / 1.0 | ✅ |
+| conversation.json ≤128 KiB、UTF-8、合法 JSON、顶层对象、无重复键/NaN | `tests/validate_submission.py`（127,442 字节通过） | ✅ |
+| 源码、Dockerfile、conversation.json 同一次 commit | **未完成**：conversation.json 仍有未提交修改 | ✗ |
+| 每天最多 2 次正式提交；预检不占机会 | 流程约束，未触发正式提测 | — |
+
+### 7.7 未覆盖 / 无法本地验证
+
+- 正式驱动协议细节（语句边界、错误码映射、就绪标识、模式切换传递、退出信号）——题包未公布。
+- 隐藏 9 个用例的具体输入与预期。
+- ANN 近似算法效果：当前 ann 为精确回退，Recall 恒 1.0；正式 ANN 阈值与索引要求以题包为准。
+- 多进程并发、断电/介质损坏/外部篡改（题目不要求）。
+- 正式 cgroup 口径的 T/B/M 与排名（本地仅做形状测量）。
+
+## 8. 覆盖边界（本总览不作结论的范围）
 
 - 正式协议（stdin/stdout 格式、错误码映射、资源限额、隐藏用例输入）未公布，全部本地结论基于公开题包与本地临时协议，不能推导正式准入。
 - p0/p1/p3 的强杀与 failpoint 时序在宿主机 Windows 进程模型下验证（`Process.kill()`）；容器内真实 SIGKILL 由 `docker_validation` 与公开题包重启路径覆盖。
