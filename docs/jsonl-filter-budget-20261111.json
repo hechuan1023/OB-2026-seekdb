@@ -340,6 +340,168 @@
           "data_device_wbytes": 6651904
         }
       }
+    },
+    "2000_seed_20261111_swapped": {
+      "groups": 2000,
+      "queries": 1000,
+      "seed": 20261111,
+      "images": [
+        "minivectordb:perf-r5c",
+        "minivectordb:filter-budget"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 1,
+          "query_seconds": 2.017000100342557,
+          "filtered_seconds": 0.9537983001209795,
+          "unfiltered_seconds": 1.0632018002215773,
+          "memory_peak_bytes": 37195776,
+          "data_device_wbytes": 13836288
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 1,
+          "query_seconds": 1.8936624001071323,
+          "filtered_seconds": 0.8228588001948083,
+          "unfiltered_seconds": 1.070803599912324,
+          "memory_peak_bytes": 37990400,
+          "data_device_wbytes": 6651904
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 2,
+          "query_seconds": 1.98242010003014,
+          "filtered_seconds": 0.9544435999850975,
+          "unfiltered_seconds": 1.0279765000450425,
+          "memory_peak_bytes": 36962304,
+          "data_device_wbytes": 13836288
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 2,
+          "query_seconds": 1.7339104001584928,
+          "filtered_seconds": 0.7503116000734735,
+          "unfiltered_seconds": 0.9835988000850193,
+          "memory_peak_bytes": 37797888,
+          "data_device_wbytes": 6651904
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 3,
+          "query_seconds": 2.2766615997970803,
+          "filtered_seconds": 1.11889809971035,
+          "unfiltered_seconds": 1.1577635000867303,
+          "memory_peak_bytes": 36954112,
+          "data_device_wbytes": 13836288
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 3,
+          "query_seconds": 1.8705268000485376,
+          "filtered_seconds": 0.8128208000707673,
+          "unfiltered_seconds": 1.0577059999777703,
+          "memory_peak_bytes": 37523456,
+          "data_device_wbytes": 6651904
+        }
+      ],
+      "medians": {
+        "minivectordb:perf-r5c": {
+          "query_seconds": 2.017000100342557,
+          "filtered_seconds": 0.9544435999850975,
+          "unfiltered_seconds": 1.0632018002215773,
+          "memory_peak_bytes": 36962304,
+          "data_device_wbytes": 13836288
+        },
+        "minivectordb:filter-budget": {
+          "query_seconds": 1.8705268000485376,
+          "filtered_seconds": 0.8128208000707673,
+          "unfiltered_seconds": 1.0577059999777703,
+          "memory_peak_bytes": 37797888,
+          "data_device_wbytes": 6651904
+        }
+      }
+    },
+    "2000_seed_20261112_swapped": {
+      "groups": 2000,
+      "queries": 1000,
+      "seed": 20261112,
+      "images": [
+        "minivectordb:perf-r5c",
+        "minivectordb:filter-budget"
+      ],
+      "rounds": [
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 1,
+          "query_seconds": 2.2514824996178504,
+          "filtered_seconds": 1.0667837997316383,
+          "unfiltered_seconds": 1.1846986998862121,
+          "memory_peak_bytes": 36958208,
+          "data_device_wbytes": 13836288
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 1,
+          "query_seconds": 1.8125020000588847,
+          "filtered_seconds": 0.7828762001154246,
+          "unfiltered_seconds": 1.0296257999434602,
+          "memory_peak_bytes": 38572032,
+          "data_device_wbytes": 6651904
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 2,
+          "query_seconds": 2.1120602999581024,
+          "filtered_seconds": 1.0316147999546956,
+          "unfiltered_seconds": 1.0804455000034068,
+          "memory_peak_bytes": 36954112,
+          "data_device_wbytes": 13836288
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 2,
+          "query_seconds": 2.1420674998807954,
+          "filtered_seconds": 0.9555318000057014,
+          "unfiltered_seconds": 1.186535699875094,
+          "memory_peak_bytes": 37531648,
+          "data_device_wbytes": 6651904
+        },
+        {
+          "image": "minivectordb:perf-r5c",
+          "round": 3,
+          "query_seconds": 2.17328869998164,
+          "filtered_seconds": 1.0309237000037683,
+          "unfiltered_seconds": 1.1423649999778718,
+          "memory_peak_bytes": 36954112,
+          "data_device_wbytes": 13836288
+        },
+        {
+          "image": "minivectordb:filter-budget",
+          "round": 3,
+          "query_seconds": 1.8145095996878808,
+          "filtered_seconds": 0.792597399908118,
+          "unfiltered_seconds": 1.0219121997797629,
+          "memory_peak_bytes": 37535744,
+          "data_device_wbytes": 6651904
+        }
+      ],
+      "medians": {
+        "minivectordb:perf-r5c": {
+          "query_seconds": 2.17328869998164,
+          "filtered_seconds": 1.0316147999546956,
+          "unfiltered_seconds": 1.1423649999778718,
+          "memory_peak_bytes": 36954112,
+          "data_device_wbytes": 13836288
+        },
+        "minivectordb:filter-budget": {
+          "query_seconds": 1.8145095996878808,
+          "filtered_seconds": 0.792597399908118,
+          "unfiltered_seconds": 1.0296257999434602,
+          "memory_peak_bytes": 37535744,
+          "data_device_wbytes": 6651904
+        }
+      }
     }
   },
   "pressure_64mib": {
@@ -389,6 +551,70 @@
         "column_values": 0,
         "warm_ms": 0.1015
       }
+    }
+  },
+  "multi_seed_2000": {
+    "seeds": [
+      20261110,
+      20261111,
+      20261112
+    ],
+    "note": "All swapped-order (formal first); 1,000 queries, 10,000 x 128, 2,000 filter values.",
+    "total_query_seconds": {
+      "20261110": [
+        2.32,
+        1.948
+      ],
+      "20261111": [
+        2.017,
+        1.871
+      ],
+      "20261112": [
+        2.173,
+        1.815
+      ]
+    },
+    "filtered_seconds": {
+      "20261110": [
+        1.093,
+        0.823
+      ],
+      "20261111": [
+        0.954,
+        0.813
+      ],
+      "20261112": [
+        1.032,
+        0.793
+      ]
+    },
+    "memory_peak_bytes": {
+      "20261110": [
+        36954112,
+        37548032
+      ],
+      "20261111": [
+        36962304,
+        37797888
+      ],
+      "20261112": [
+        36954112,
+        37535744
+      ]
+    },
+    "data_device_wbytes": {
+      "20261110": [
+        13836288,
+        6651904
+      ],
+      "20261111": [
+        13836288,
+        6651904
+      ],
+      "20261112": [
+        13836288,
+        6651904
+      ]
     }
   }
 }
