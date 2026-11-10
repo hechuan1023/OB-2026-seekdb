@@ -221,7 +221,11 @@ def _decode_row(data):
 
 
 def write_record(file, value):
-    if value[0] == 'row':
+    # Large strings are cheaper through the C pickle path; vector rows (and
+    # deletes) use the compact tagged encoding.
+    if value[0] == 'row' and (value[3] is None or
+                              not any(isinstance(item, str) and len(item) > 256
+                                      for item in value[3])):
         data = b'\x01' + _encode_row(value)
     else:
         data = b'\x00' + pickle.dumps(value, protocol=5)
