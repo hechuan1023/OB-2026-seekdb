@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- |
 | 官方公开题包 | `mysqltest/` | 组织方（`9f6df2ba` 原样合入） | 20 组 / 95 条 SQL | 断言权威；不得修改来迁就实现 |
 | 仓库自测套件 | `tests/` | 原开发 Agent | 106 项 | 引擎/索引/恢复/题包适配的 unittest |
-| 独立交叉验证组 | `tests_cross/` | 交叉验证 Agent（未参与开发） | 6 组，约 1,400 次验证动作 | 自带管道客户端，真值独立建立 |
+| 独立交叉验证组 | `tests_cross/` | 交叉验证 Agent（未参与开发） | 8 组，约 1,450 次验证动作 | 自带管道客户端，真值独立建立 |
 
 正式准入共 29 个用例：公开 20 个之外另有 9 个隐藏（输入与预期由组织方保留）。公开样例通过不等于正式准入。
 
@@ -116,7 +116,35 @@ docker run --rm --network none --cpus=2 --memory=256m --memory-swap=256m \
 - 上下文关键字表名（`order` 与 ORDER BY 共存）、大小写折叠重复列、跨行向量字面量。
 - `--mode ann` 启动参数与控制行切换；三表不同维度索引交错 + 重启。
 
-### 4.7 驱动误判审计（内联，8 项注入检查）
+### 4.7 p5_benchmark_shape.py — 官方 benchmark 形状检索正确性（19 项，host + 容器各一遍）
+
+依据赛题 7.1 负载形状与 3 VEC-09/召回规则：
+
+- 5,000 行 × 128 维、每批 100 条提交（官方写入形状）、K=10、300 次查询（一半带普通列过滤）。
+- 逐条校验 VEC-09：ID 必须存在、无重复、满足过滤条件、距离与当前记录独立真值一致（1e-5）、顺序正确。
+- **Recall@10 按官方公式分组计算**：真值在过滤后集合内取 `(distance, primary_key)` 前 K；分母 `min(K, N)`；空集合不参与平均；过滤组与无过滤组**分别**要求 ≥ 0.95（精确路径实测均为 1.0）。
+- exact 与 `--mode ann` 双模式各跑一遍（ann 当前为精确回退，验证的是契约而非近似效果）。
+- VEC-07 索引维护交错：建索引后 10 增、5 向量更新、5 删除，再查 50 条对照更新后真值。
+- TX-07：五个 tag 分组分别比较普通查询集合与 TopK（K≥N）集合，必须完全相等。
+- 4.1 派生索引可重建：强杀留下 `flat-*` 文件 → 删除 → 重启，查询仍与真值一致且文件重新生成。
+
+### 4.8 p6_transaction_matrix.py — 事务矩阵与协议契约（42 项，host + 容器各一遍）
+
+逐条对应赛题 4.2/4.1/5.2：
+
+- **TX-01** 自动提交插入/更新/删除，强杀重启后全部保留。
+- **TX-02** 事务内普通查询与向量检索均读到自身修改；ROLLBACK 后两者同时恢复（含距离并列按主键升序）。
+- **TX-03** 多行插入中途重复主键 → 整条无部分修改，同一语句可重试成功。
+- **TX-04** 事务内先成功修改、再失败语句，**COMMIT 与 ROLLBACK 两分支**分别验证；重启后状态正确。
+- **TX-05** 事务内向量更新+删除+插入后 TopK 反映变化；ROLLBACK 后 TopK 与基线逐项一致（ID 与距离）。
+- **TX-06** COMMIT 确认后立即强杀，重启保留。
+- **TX-07** 六个阶段（初始/插入/过滤列更新/向量更新/删除/回滚）普通查询集合与 TopK 集合一致。
+- **协议 5.2**：50 条语句同一 PID 连续处理；stdout 仅协议行（READY/OK/RESULT/数据行/END/ERROR）；stderr 为空；单条响应 < 2s；错误后继续可用。
+- **READY 时序 4.1**：脏快照 + `during_vector_rebuild` failpoint → 进程终止且**从未输出 READY**，证明就绪在重建完成之后；重启后查询正确。
+- **派生索引重建 4.1**：强杀保留 `flat-*` → 删除 → 重启，TopK 与基线一致。
+- **数据目录收敛**：无 `sort-*.tmp`/`modify-*.tmp`/`transaction.*`/`checkpoint.wal` 残留；权威 WAL 与派生索引均在数据目录内。
+
+### 4.9 驱动误判审计（内联，8 项注入检查）
 
 对 `tests/test_public_cases.py` 的断言路径注入错误响应：成功不得充当预期错误、错误码精确匹配、未映射语义拒绝、unordered 多重集合不丢重复行、列名/行内容/1e-5 容差均会正确失败。另对 20 组逐组审计 `{}`/`error`/`unordered`/浮点断言分布与 README 声明一致。
 
@@ -133,6 +161,8 @@ python -X utf8 tests_cross/p1_recovery_timing.py               # 22
 python -X utf8 tests_cross/p2_sql_surface.py                   # 166
 python -X utf8 tests_cross/p3_random_model.py 301 302 303 304 305 306 307
 python -X utf8 tests_cross/p4_edges.py                         # 103
+python -X utf8 tests_cross/p5_benchmark_shape.py               # 19（5,000×128 维）
+python -X utf8 tests_cross/p6_transaction_matrix.py            # 42
 
 # Linux 容器（镜像内实现；tests/tests_cross/mysqltest 只读挂载）
 docker run --rm --network none --cpus=2 --memory=256m --memory-swap=256m \
@@ -164,8 +194,10 @@ docker run --rm --network none --cpus=2 --memory=64m --memory-swap=64m \
 | p2_sql_surface | 166 | 162 |
 | p3_random_model（7 种子） | 902 次验证 | 1,619 |
 | p4_edges | 103 | 101 |
-| **独立组小计** | **1,392** | **2,758** |
-| **合计（不含双路径重复）** | — | **约 6,660** |
+| p5_benchmark_shape | 19 | 753 |
+| p6_transaction_matrix | 42 | 162 |
+| **独立组小计** | **1,453** | **3,673** |
+| **合计（不含双路径重复）** | — | **约 7,575** |
 
 说明：官方 95 条为权威计数（manifest 声明并经脚本逐文件核对）；套件与独立组为实测值，因随机种子与循环生成而每次运行略有差异。p0/p1 的语句数较少是因为其检查以"重启后核对"为主，一条语句配多次状态验证。
 
