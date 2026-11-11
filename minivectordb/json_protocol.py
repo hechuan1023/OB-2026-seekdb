@@ -1,5 +1,6 @@
 """Official newline-delimited JSON transport, separate from SQL execution."""
 import json
+import math
 from array import array
 
 from .errors import DBError
@@ -10,6 +11,26 @@ from .sql import parse
 def _json(value):
     return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(',', ':'),
                       default=lambda x: list(x) if isinstance(x, array) else x)
+
+
+def _json_row(row):
+    """Format an all-integer/float row without the generic encoder.
+
+    repr() and json.dumps() use the same shortest round-trip form for finite
+    floats, so the bytes are identical. Anything else falls back to _json.
+    """
+    parts = []
+    for value in row:
+        kind = type(value)
+        if kind is int:
+            parts.append(str(value))
+        elif kind is float:
+            if not math.isfinite(value):
+                return _json(row)
+            parts.append(repr(value))
+        else:
+            return _json(row)
+    return '[' + ','.join(parts) + ']'
 
 
 def _emit(output, value):
@@ -51,7 +72,7 @@ def serve(engine, input_stream, output):
                 chunk = []
                 try:
                     for row in value.rows:
-                        chunk.append(('' if first else ',') + _json(row))
+                        chunk.append(('' if first else ',') + _json_row(row))
                         first = False
                         if len(chunk) >= 64:
                             output.write(''.join(chunk))

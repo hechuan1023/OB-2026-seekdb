@@ -3,9 +3,24 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from array import array
+
+from minivectordb.json_protocol import _json, _json_row
 
 
 class JsonProtocolTests(unittest.TestCase):
+    def test_numeric_row_encoder_matches_generic_json(self):
+        rows = [(), (0, -1, 9223372036854775807, -9223372036854775808),
+                (0.0, -0.0, 1e-300, 1e300, 5e-324),
+                (True, None, '中文', array('f', [1, 2])),
+                (1, [2, 3], 'x')]
+        for row in rows:
+            with self.subTest(row=row):
+                self.assertEqual(_json_row(row), _json(row))
+        for value in (float('inf'), float('-inf'), float('nan')):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                _json_row((value,))
+
     def test_requests_transactions_modes_and_shutdown(self):
         with tempfile.TemporaryDirectory() as directory:
             p = subprocess.Popen([sys.executable, '-m', 'minivectordb', '--wire', 'jsonl',
