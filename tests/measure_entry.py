@@ -13,9 +13,14 @@ original = vector_index.Snapshot.__init__
 def measured_init(self, *args, **kwargs):
     start = time.perf_counter()
     original(self, *args, **kwargs)
+    # Small snapshots stay in anonymous memory and never create the flat
+    # files; report the logical size instead of touching optional paths.
+    logical = (sum(path.stat().st_size for path in self.paths)
+               if all(path.exists() for path in self.paths)
+               else self.count * (self.dimensions * 4 + 8))
     print('MVDB_BUILD ' + json.dumps({
         'rows': self.count,
-        'logical_bytes': sum(path.stat().st_size for path in self.paths),
+        'logical_bytes': logical,
         'seconds': time.perf_counter() - start,
     }), file=sys.stderr, flush=True)
 
