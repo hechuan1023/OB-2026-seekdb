@@ -1,0 +1,122 @@
+{
+  "images": [
+    "minivectordb:defer-sorter-candidate",
+    "minivectordb:from-e7ff-candidate"
+  ],
+  "seed": 20261110,
+  "rows": 10000,
+  "dimensions": 128,
+  "queries": 1000,
+  "groups": 5,
+  "rounds": [
+    {
+      "image": "minivectordb:defer-sorter-candidate",
+      "round": 1,
+      "write_seconds": 2.5998526999901515,
+      "query_seconds": 2.080496400478296,
+      "filtered_seconds": 0.9913791005383246,
+      "unfiltered_seconds": 1.0891172999399714,
+      "first_filter_seconds": {
+        "g0": 0.01957219999167137,
+        "g1": 0.0019394000119064003,
+        "g2": 0.001583700010087341,
+        "g3": 0.0020484999986365438,
+        "g4": 0.002059699996607378
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36724736,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    },
+    {
+      "image": "minivectordb:from-e7ff-candidate",
+      "round": 1,
+      "write_seconds": 2.24366929999087,
+      "query_seconds": 2.7684002998284996,
+      "filtered_seconds": 1.373828899959335,
+      "unfiltered_seconds": 1.3945713998691645,
+      "first_filter_seconds": {
+        "g0": 0.020445200003450736,
+        "g1": 0.0019480999908410013,
+        "g2": 0.0030153999978210777,
+        "g3": 0.002441499993437901,
+        "g4": 0.0015175000007729977
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36978688,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    },
+    {
+      "image": "minivectordb:defer-sorter-candidate",
+      "round": 2,
+      "write_seconds": 2.368873800005531,
+      "query_seconds": 2.4042854998551775,
+      "filtered_seconds": 1.157127899787156,
+      "unfiltered_seconds": 1.2471576000680216,
+      "first_filter_seconds": {
+        "g0": 0.020084100018721074,
+        "g1": 0.0016094000020530075,
+        "g2": 0.0017174000095110387,
+        "g3": 0.0023950999893713742,
+        "g4": 0.002362400002311915
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36491264,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    },
+    {
+      "image": "minivectordb:from-e7ff-candidate",
+      "round": 2,
+      "write_seconds": 2.5540396999858785,
+      "query_seconds": 2.4287768001377117,
+      "filtered_seconds": 1.1700402998831123,
+      "unfiltered_seconds": 1.2587365002545994,
+      "first_filter_seconds": {
+        "g0": 0.02247419999912381,
+        "g1": 0.002299999992828816,
+        "g2": 0.0047842999920248985,
+        "g3": 0.0031339999986812472,
+        "g4": 0.002806800010148436
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36429824,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    },
+    {
+      "image": "minivectordb:defer-sorter-candidate",
+      "round": 3,
+      "write_seconds": 2.2356634000025224,
+      "query_seconds": 2.289284899830818,
+      "filtered_seconds": 1.0893582999997307,
+      "unfiltered_seconds": 1.1999265998310875,
+      "first_filter_seconds": {
+        "g0": 0.02448520000325516,
+        "g1": 0.00403729997924529,
+        "g2": 0.005370000028051436,
+        "g3": 0.001656900014495477,
+        "g4": 0.0035069999867118895
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36958208,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    },
+    {
+      "image": "minivectordb:from-e7ff-candidate",
+      "round": 3,
+      "write_seconds": 2.25466909998795,
+      "query_seconds": 2.3531476009229664,
+      "filtered_seconds": 1.120215600647498,
+      "unfiltered_seconds": 1.2329320002754685,
+      "first_filter_seconds": {
+        "g0": 0.01999289999366738,
+        "g1": 0.0032315000134985894,
+        "g2": 0.002072000002954155,
+        "g3": 0.0020481999963521957,
+        "g4": 0.0018451999931130558
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36769792,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    }
+  ],
+  "notes": "Local JSONL correctness and wall-clock comparison; not official benchmark. Insert SQL, queries and truth prepared on host before timing, data volumes independent, no cold-cache control. cgroup metrics read after sync before shutdown, exec helper included; io.stat is raw, no device attribution verified."
+}

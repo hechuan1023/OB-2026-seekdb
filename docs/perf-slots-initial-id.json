@@ -1,0 +1,122 @@
+{
+  "images": [
+    "minivectordb:from-e7ff-candidate",
+    "minivectordb:defer-sorter-candidate"
+  ],
+  "seed": 20261110,
+  "rows": 10000,
+  "dimensions": 128,
+  "queries": 1000,
+  "groups": 5,
+  "rounds": [
+    {
+      "image": "minivectordb:from-e7ff-candidate",
+      "round": 1,
+      "write_seconds": 2.702331599983154,
+      "query_seconds": 2.2866694003459997,
+      "filtered_seconds": 1.1002708002342843,
+      "unfiltered_seconds": 1.1863986001117155,
+      "first_filter_seconds": {
+        "g0": 0.046995499986223876,
+        "g1": 0.003960000001825392,
+        "g2": 0.002603800006909296,
+        "g3": 0.0029341999907046556,
+        "g4": 0.002357000019401312
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36777984,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    },
+    {
+      "image": "minivectordb:defer-sorter-candidate",
+      "round": 1,
+      "write_seconds": 2.7505856000061613,
+      "query_seconds": 2.1107932998565957,
+      "filtered_seconds": 1.0087185997399502,
+      "unfiltered_seconds": 1.1020747001166455,
+      "first_filter_seconds": {
+        "g0": 0.020704199996544048,
+        "g1": 0.0016275999951176345,
+        "g2": 0.0021624000219162554,
+        "g3": 0.0018326000135857612,
+        "g4": 0.0026517999940551817
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36798464,
+      "io_stat_raw": "8:80 \n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    },
+    {
+      "image": "minivectordb:from-e7ff-candidate",
+      "round": 2,
+      "write_seconds": 2.7110145000042394,
+      "query_seconds": 2.2366583998664282,
+      "filtered_seconds": 1.0614556998189073,
+      "unfiltered_seconds": 1.175202700047521,
+      "first_filter_seconds": {
+        "g0": 0.02037479999125935,
+        "g1": 0.0023495999921578914,
+        "g2": 0.0021502999879885465,
+        "g3": 0.002217700006440282,
+        "g4": 0.0020878000068478286
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36700160,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    },
+    {
+      "image": "minivectordb:defer-sorter-candidate",
+      "round": 2,
+      "write_seconds": 2.45381149998866,
+      "query_seconds": 2.1014454991964158,
+      "filtered_seconds": 1.0159592992858961,
+      "unfiltered_seconds": 1.0854861999105196,
+      "first_filter_seconds": {
+        "g0": 0.020775999990291893,
+        "g1": 0.003633500018622726,
+        "g2": 0.003108499979134649,
+        "g3": 0.0031236999784596264,
+        "g4": 0.0020035000052303076
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36749312,
+      "io_stat_raw": "8:80 \n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    },
+    {
+      "image": "minivectordb:from-e7ff-candidate",
+      "round": 3,
+      "write_seconds": 2.622959100001026,
+      "query_seconds": 2.232231400121236,
+      "filtered_seconds": 1.043011099944124,
+      "unfiltered_seconds": 1.1892203001771122,
+      "first_filter_seconds": {
+        "g0": 0.020801299979211763,
+        "g1": 0.002234699990367517,
+        "g2": 0.0014048999873921275,
+        "g3": 0.0016777999990154058,
+        "g4": 0.0021495000110007823
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36794368,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    },
+    {
+      "image": "minivectordb:defer-sorter-candidate",
+      "round": 3,
+      "write_seconds": 2.520115299994359,
+      "query_seconds": 2.2259245997993276,
+      "filtered_seconds": 1.0456644999794662,
+      "unfiltered_seconds": 1.1802600998198614,
+      "first_filter_seconds": {
+        "g0": 0.02016149999690242,
+        "g1": 0.0017389999993611127,
+        "g2": 0.0019078000041190535,
+        "g3": 0.001887999998871237,
+        "g4": 0.0015578999882563949
+      },
+      "recall_exact": 1.0,
+      "memory_peak_bytes": 36671488,
+      "io_stat_raw": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=8609792 rios=0 wios=266 dbytes=0 dios=0"
+    }
+  ],
+  "notes": "Local JSONL correctness and wall-clock comparison; not official benchmark. Queries and truth prepared on host, data volumes independent, no cold-cache control. cgroup metrics read after sync before shutdown, exec helper included; io.stat is raw, no device attribution verified."
+}

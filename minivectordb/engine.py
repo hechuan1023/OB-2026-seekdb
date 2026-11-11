@@ -323,12 +323,6 @@ class Engine:
             require(bound[0] == 'distance' or schema['columns'][bound[1]][1] != 'VECTOR', 'UNSUPPORTED', 'Cannot ORDER BY a vector directly')
             sort_keys.append((bound, descending))
 
-        # Bind shared expressions once. A distance expression contains the query
-        # vector: hashing it for every row repeatedly hashes all its dimensions.
-        unique = list(dict.fromkeys(expressions + [expr for expr, _ in sort_keys]))
-        slots = {expr: i for i, expr in enumerate(unique)}
-        projection_slots = [slots[expr] for expr in expressions]
-        order_slots = [(slots[expr], descending) for expr, descending in sort_keys]
         point_lookup = any(i == schema['pk'] and op == '=' for i, op, _ in conditions)
 
         def output():
@@ -362,6 +356,13 @@ class Engine:
                         break
                     yield tuple(self.evaluate(row, expr) for expr in expressions)
                 return
+            # Bind shared expressions once. A distance expression contains the
+            # query vector: hashing it for every row repeatedly hashes all its
+            # dimensions. Only the generic sorter path needs the slot table.
+            unique = list(dict.fromkeys(expressions + [expr for expr, _ in sort_keys]))
+            slots = {expr: i for i, expr in enumerate(unique)}
+            projection_slots = [slots[expr] for expr in expressions]
+            order_slots = [(slots[expr], descending) for expr, descending in sort_keys]
             sorter = Sorter(self.storage.directory, self.sort_memory, limit)
             try:
                 for row in candidates:
