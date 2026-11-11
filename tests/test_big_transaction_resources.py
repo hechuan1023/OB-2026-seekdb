@@ -38,6 +38,24 @@ class BigTransactionResourceTests(unittest.TestCase):
             self.db.execute(f"INSERT INTO t VALUES ({base + i},'g{i % 5}','[{i % 97},0,{i % 13},0]')")
         return (time.perf_counter() - start) / count
 
+    def fresh_small_txn_cost(self):
+        """Same small-transaction shape on a fresh engine: the environment's
+        baseline cost (fsync, CPU) without any big-transaction history."""
+        with tempfile.TemporaryDirectory() as fresh:
+            engine = Engine(fresh)
+            try:
+                engine.execute('CREATE TABLE t(id BIGINT PRIMARY KEY,tag VARCHAR(8),v VECTOR(4))')
+                return self._cost_on(engine)
+            finally:
+                engine.close()
+
+    @staticmethod
+    def _cost_on(engine, count=100):
+        start = time.perf_counter()
+        for i in range(count):
+            engine.execute(f"INSERT INTO t VALUES ({900_000 + i},'g{i % 5}','[{i % 97},0,{i % 13},0]')")
+        return (time.perf_counter() - start) / count
+
     def test_big_commit_does_not_tax_small_transactions(self):
         self.db.execute('BEGIN')
         for i in range(BIG):
@@ -46,9 +64,12 @@ class BigTransactionResourceTests(unittest.TestCase):
         self.assertEqual(self.db.storage.overlay.capacity,
                          self.db.storage.overlay_initial_capacity)
         after = self.small_txn_cost()
-        # Without the shrink, a grown overlay zeroed ~MBs per small begin.
-        self.assertLess(after * 1000, 4.0,
-                        f'small transaction costs {after * 1000:.2f} ms after a big commit')
+        fresh = self.fresh_small_txn_cost()
+        # Without the shrink, a grown overlay zeroed MBs per small begin and
+        # small transactions measured ~2.5x the fresh baseline.
+        self.assertLess(after, fresh * 1.5,
+                        f'small transaction costs {after * 1000:.2f} ms after a big '
+                        f'commit vs {fresh * 1000:.2f} ms fresh')
 
     def test_big_rollback_does_not_tax_small_transactions(self):
         self.db.execute('BEGIN')
@@ -58,8 +79,10 @@ class BigTransactionResourceTests(unittest.TestCase):
         self.assertEqual(self.db.storage.overlay.capacity,
                          self.db.storage.overlay_initial_capacity)
         after = self.small_txn_cost()
-        self.assertLess(after * 1000, 4.0,
-                        f'small transaction costs {after * 1000:.2f} ms after a big rollback')
+        fresh = self.fresh_small_txn_cost()
+        self.assertLess(after, fresh * 1.5,
+                        f'small transaction costs {after * 1000:.2f} ms after a big '
+                        f'rollback vs {fresh * 1000:.2f} ms fresh')
 
     def test_reset_never_allocates_map_sized_temporary(self):
         import tracemalloc
