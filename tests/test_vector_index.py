@@ -54,6 +54,18 @@ class NativeIndexTests(unittest.TestCase):
                 self.compare_reference(f"SELECT id,tag,v,L2_DISTANCE(v,'{vector}') AS d FROM t {where} ORDER BY d LIMIT {k}")
         self.assertGreater(self.db.vector_indexes.searches, 0)
 
+    def test_snapshot_projection_tracks_transaction_visibility(self):
+        sql = "SELECT L2_DISTANCE(v,'[1,2,3,4]') AS d,id,id FROM t WHERE tag='g1' ORDER BY d LIMIT 10"
+        before = self.compare_reference(sql)
+        self.db.execute('BEGIN')
+        self.db.execute("INSERT INTO t VALUES (200,'g1','[1,2,3,4]')")
+        self.assertEqual(self.compare_reference(sql)[0], (0.0, 200, 200))
+        with self.assertRaises(DBError):
+            self.db.execute("INSERT INTO t VALUES (201,'g1','[1,2,3,4]'),(200,'g1','[1,2,3,4]')")
+        self.assertEqual(self.compare_reference(sql)[0], (0.0, 200, 200))
+        self.db.execute('ROLLBACK')
+        self.assertEqual(self.compare_reference(sql), before)
+
     def test_mutation_commit_rollback_and_failed_statement(self):
         sql = "SELECT id,L2_DISTANCE(v,'[1,2,3,4]') AS d FROM t WHERE tag='g1' ORDER BY d LIMIT 10"
         before = self.compare_reference(sql)
@@ -176,6 +188,16 @@ class NativeIndexTests(unittest.TestCase):
         for value in ('x0', 'x1000', 'x1998', 'missing'):
             self.compare_reference(sql.format(value))
         self.assertLessEqual(self.db.vector_indexes.filter_bytes, self.db.vector_indexes.filter_budget)
+
+    def test_small_vector_snapshot_stays_in_memory(self):
+        self.compare_reference("SELECT id FROM t ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 5")
+        snapshot = self.db.vector_indexes.entries[self.db.table('t')['id']]
+        self.assertIsInstance(snapshot.vectors, bytearray)
+        self.assertFalse(list(Path(self.temp.name).glob('flat-*.vec')))
+        self.assertFalse(list(Path(self.temp.name).glob('flat-*.keys')))
+        # Mutations rebuild the snapshot and must keep results consistent.
+        self.db.execute("UPDATE t SET v='[1,2,3,4]' WHERE id=0")
+        self.assertEqual(self.compare_reference("SELECT id FROM t ORDER BY L2_DISTANCE(v,'[1,2,3,4]') LIMIT 1"), [(0,)])
 
     def test_ties_use_reference_and_primary_key(self):
         self.db.execute("UPDATE t SET v='[1,0,0,0]'")
