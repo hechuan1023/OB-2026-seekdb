@@ -44,7 +44,7 @@
     "tests/test_records_reader.py": "ba46a0da503a6d816c0eff3af06bb88dfe62bd1b3e8ece2dd9a6aedb0475b17c",
     "tests/test_recovery.py": "7230b78f06fdb672f879a8254b2c524b0894f216588d291a5b2a45ca200c736e",
     "tests/test_transaction_reuse.py": "79a7d1a4487d241c419172eb334c95b2b6b09799db56f9345abf538d04f4eed3",
-    "tests/test_vector_index.py": "d72bc1e58a1eaaa14627ddc7f8aab13be566f25ba5dab669381032a4542eef8f",
+    "tests/test_vector_index.py": "9e07d5cda7dedeab456483371e440c1d865cf0a14898b8c99f20b1db5e72ca0f",
     "tests/validate_submission.py": "b65449d32f80a36ae1b728c5401e9be66a4968480cf96ad6defc9a87a8a1638d",
     "tests_cross/p0_transaction_kill.py": "62016593baa1b6aa486f30801e187785e4bd2139f835df083714bc5c70ef0c9b",
     "tests_cross/p0_vector_modes.py": "9dc9751848b95aa3b8104ebd0b0b794ac4792998c1603176b0bdc4e97ef8628b",
