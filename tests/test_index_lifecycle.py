@@ -102,9 +102,69 @@ class IndexLifecycleTests(unittest.TestCase):
         self.db.execute('DELETE FROM a WHERE id=3')
         self.assertEqual(self.query()[0][0], 1)
         self.db.execute('ROLLBACK')
-        self.assertNotIn(self.db.table('a')['id'], self.db.vector_indexes.entries)
+        # The incremental delete keeps the snapshot and removes its tombstone.
+        self.assertIn(self.db.table('a')['id'], self.db.vector_indexes.entries)
+        self.assertNotIn(3, self.snapshot().deleted)
         self.assertEqual(self.query()[0][0], 3)
         self.assertIs(self.snapshot('b'), b)
+
+    def test_incremental_delete_tombstone_behaviour(self):
+        # Autocommit delete: tombstone only, no rebuild, query stays correct.
+        a = self.snapshot()
+        self.db.execute('DELETE FROM a WHERE id=1')
+        self.assertIs(self.snapshot(), a)
+        self.assertIn(1, a.deleted)
+        self.assertEqual([r[0] for r in self.query()], [2, 3])
+        self.assertEqual([r[0] for r in self.query(where="WHERE tag='yes'")], [3])
+
+    def test_rollback_delete_restores_rows_and_filters(self):
+        # Filters cached before the delete hold positions that must not
+        # survive it; after rollback the rows must be queryable again.
+        self.query(where="WHERE tag='yes'")
+        self.query(where="WHERE tag='no'")
+        a = self.snapshot()
+        self.db.execute('BEGIN')
+        self.db.execute('DELETE FROM a WHERE id=1')
+        self.assertEqual([r[0] for r in self.query(where="WHERE tag='yes'")], [3])
+        self.db.execute('ROLLBACK')
+        self.assertIs(self.snapshot(), a)
+        self.assertNotIn(1, a.deleted)
+        self.assertEqual([r[0] for r in self.query(where="WHERE tag='yes'")], [1, 3])
+        self.assertEqual([r[0] for r in self.query(where="WHERE tag='no'")], [2])
+
+    def test_transaction_filters_created_after_delete_go_stale_on_rollback(self):
+        # A filter cached between the delete and the rollback excludes the
+        # deleted row; it must be dropped when the row returns.
+        self.db.execute('BEGIN')
+        self.db.execute('DELETE FROM a WHERE id=1')
+        self.assertEqual([r[0] for r in self.query(where="WHERE tag='yes'")], [3])
+        self.db.execute('ROLLBACK')
+        self.assertEqual([r[0] for r in self.query(where="WHERE tag='yes'")], [1, 3])
+
+    def test_tombstone_threshold_rebuilds_snapshot(self):
+        # Tombstones outnumbering live rows force a rebuild (the entry is
+        # dropped and rebuilt lazily), and a rollback after that rebuild must
+        # invalidate rather than un-mark tombstones on a stale snapshot.
+        for i in range(4, 9):
+            self.db.execute(f"INSERT INTO a VALUES ({i},'no','old','[{i},0]')")
+        self.query()  # INSERTs invalidated the snapshot; rebuild it first.
+        a = self.snapshot()
+        self.db.execute('BEGIN')
+        self.db.execute('DELETE FROM a WHERE id > 2')  # 6 of 8 rows: rebuild.
+        self.assertNotIn(self.db.table('a')['id'], self.db.vector_indexes.entries)
+        self.db.execute('ROLLBACK')
+        self.assertEqual([r[0] for r in self.query()], [1, 2, 3, 4, 5, 6, 7, 8])
+        self.assertIsNot(self.snapshot(), a)
+
+    def test_delete_then_failed_statement_keeps_tombstone(self):
+        # A failed statement after the delete must not resurrect the row.
+        self.db.execute('BEGIN')
+        self.db.execute('DELETE FROM a WHERE id=1')
+        with self.assertRaises(DBError):
+            self.db.execute("UPDATE a SET tag='x', v='[bad' WHERE id=2")
+        self.assertEqual([r[0] for r in self.query()], [2, 3])
+        self.db.execute('ROLLBACK')
+        self.assertEqual([r[0] for r in self.query()], [1, 2, 3])
 
     def test_rollback_created_index_and_reused_table_identifier(self):
         self.db.execute('BEGIN')

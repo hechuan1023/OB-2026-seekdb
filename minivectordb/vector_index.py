@@ -23,6 +23,10 @@ KEY = struct.Struct('<q')
 # table-sized anonymous memory.
 MEMORY_SNAPSHOT_LIMIT = 8 * 1024 * 1024
 
+# Placeholder for a deleted row in the cached column-value list, so list
+# indices stay aligned with snapshot positions.
+DELETED = object()
+
 
 class NativeKernel:
     def __init__(self):
@@ -70,6 +74,7 @@ class Snapshot:
         self.paths = [storage.directory / f'flat-{schema["id"]}.{extension}' for extension in ('vec', 'keys')]
         self.vectors = self.keys = None
         self.count = 0
+        self.deleted = set()
         vectors, keys = bytearray(), bytearray()
         row_bytes = self.dimensions * 4 + KEY.size
         overlay = storage.overlay.count if storage.overlay is not None else 0
@@ -109,6 +114,9 @@ class Snapshot:
                 # never writes. All backing files remain under the data directory.
                 self.vectors = mmap.mmap(vectors.fileno(), 0, access=mmap.ACCESS_COPY)
                 self.keys = mmap.mmap(keys.fileno(), 0, access=mmap.ACCESS_COPY)
+
+    def difference_update(self, keys):
+        self.deleted.difference_update(keys)
 
     def key(self, position):
         return KEY.unpack_from(self.keys, position * KEY.size)[0]
@@ -194,6 +202,43 @@ class VectorIndexes:
         if snapshot is not None:
             snapshot.patch(rows, column)
 
+    def delete_keys(self, table, keys):
+        """Mark deleted rows so queries skip them without a full rebuild.
+
+        Cached filters hold positions, so they must not outlive a delete.
+        Returns the snapshot the tombstones landed on, or None if the table
+        has no snapshot (or it was rebuilt past the tombstone threshold).
+        """
+        snapshot = self.entries.get(table)
+        if snapshot is None or not keys:
+            self.invalidate_filters(table)
+            return None
+        snapshot.deleted.update(keys)
+        self.invalidate_filters(table)
+        if len(snapshot.deleted) * 2 > snapshot.count:
+            self.invalidate(table)  # Tombstones outnumber live rows: rebuild.
+            return None
+        return snapshot
+
+    def restore_keys(self, table, keys, snapshot):
+        """Undo tombstones after a rollback, keeping the snapshot when safe.
+
+        The snapshot may have been rebuilt during the transaction (tombstone
+        threshold, INSERT membership change) and then no longer contains the
+        deleted rows; only the snapshot the deletes landed on can un-mark them.
+        Filter caches are always dropped: caches built during the transaction
+        exclude the deleted rows and go stale once the rows return.
+        """
+        self.invalidate_filters(table)
+        if not keys:
+            return
+        if snapshot is not None and self.entries.get(table) is snapshot:
+            snapshot.difference_update(keys)
+            if len(snapshot.deleted) * 2 > snapshot.count:
+                self.invalidate(table)
+        else:
+            self.invalidate(table)
+
     def invalidate_filters(self, table=None, columns=None):
         self.grouping_suppressed = {
             key for key in self.grouping_suppressed
@@ -222,6 +267,8 @@ class VectorIndexes:
         selected = array('Q')
         for position in range(snapshot.count):
             row = self.storage.get(schema['id'], snapshot.key(position))
+            if row is None:
+                continue  # deleted row
             if matches(row, conditions):
                 selected.append(position)
                 if sys.getsizeof(selected) + overhead > self.filter_budget:
@@ -276,7 +323,8 @@ class VectorIndexes:
         values = []
         value_bytes = sys.getsizeof(values)
         for position in range(snapshot.count):
-            current = self.storage.get(schema['id'], snapshot.key(position))[column]
+            row = self.storage.get(schema['id'], snapshot.key(position))
+            current = DELETED if row is None else row[column]
             if current == value:
                 selected.append(position)
                 if sys.getsizeof(selected) + overhead > self.filter_budget:
@@ -327,37 +375,41 @@ class VectorIndexes:
         snapshot = self.ensure(schema)
         if snapshot is None:
             return None
-        if not snapshot.count:
+        deleted = snapshot.deleted
+        if snapshot.count - len(deleted) <= 0:
             return []
         selected = self.selection(schema, snapshot, conditions, matches) if conditions else None
         if selected is False:
             return None
-        nearest = self.kernel.topk(snapshot, expression[2], selected, limit + 1)
+        # The filter scan already excludes deleted rows; an unfiltered scan may
+        # return them, so fetch enough extra candidates to skip the tombstones.
+        keep = limit + 1 + (len(deleted) if selected is None else 0)
+        if keep > self.max_keep:
+            return None
+        nearest = self.kernel.topk(snapshot, expression[2], selected, keep)
         self.searches += 1
-        if len(nearest) > limit:
-            a, b = nearest[limit - 1][1], nearest[limit][1]
-            # The kernel returns squared distances (monotone, so ordering and
-            # ties are unchanged). A squared relative gap is about twice the
-            # distance gap, making this guard more conservative than before:
-            # ambiguous boundaries still fall back to the reference executor.
-            # Finite float32 differences and dimensions <= 65536 cannot overflow
-            # double squares.
-            if b - a <= max(abs(a), abs(b)) * 1e-12 + 1e-300:
-                self.fallbacks += 1
-                return None
         verified = []
         for position, _ in nearest:
+            key = snapshot.key(position)
+            if key in deleted:
+                continue
             if pk_only:
                 # The projection only needs the primary key and the distance:
                 # read both from the snapshot instead of probing the row index.
-                key = snapshot.key(position)
                 distance = math.dist(snapshot.vector(position), expression[2])
                 verified.append((distance, key, key))
             else:
-                row = self.storage.get(schema['id'], snapshot.key(position))
+                row = self.storage.get(schema['id'], key)
                 distance = math.dist(row[expression[1]], expression[2])
                 verified.append((distance, row[schema['pk']], row))
         verified.sort(key=lambda item: (item[0], item[1]))
+        if len(verified) > limit:
+            a, b = verified[limit - 1][0], verified[limit][0]
+            # Exact-distance boundary guard; ambiguous ties fall back to the
+            # reference executor.
+            if b - a <= max(abs(a), abs(b)) * 1e-12 + 1e-300:
+                self.fallbacks += 1
+                return None
         # Hand the exact distance back so the projection does not recompute it.
         return [(item[2], item[0]) for item in verified[:limit]]
 

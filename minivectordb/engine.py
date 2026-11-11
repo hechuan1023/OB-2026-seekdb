@@ -77,6 +77,8 @@ class Engine:
         self.transaction_changes = {}
         self.statement_changes = {}
         self.statement_vector_patches = {}
+        self.transaction_deletes = {}
+        self.statement_deletes = {}
         self.sort_memory = sort_memory
         self.mode = mode  # Both modes currently use the exact flat search path.
         self.native = native
@@ -106,6 +108,7 @@ class Engine:
             self.storage.begin()
             self.explicit = True
             self.transaction_changes = {}
+            self.transaction_deletes = {}
             return 0
         if op in ('commit', 'rollback'):
             require(self.explicit, 'TRANSACTION_ERROR', 'No active transaction')
@@ -114,7 +117,10 @@ class Engine:
             # snapshot. Rollback changes only tables/columns touched by this tx.
             if op == 'rollback':
                 self.invalidate_changes(self.transaction_changes)
+                for identifier, (keys, snapshot) in self.transaction_deletes.items():
+                    self.vector_indexes.restore_keys(identifier, keys, snapshot)
             self.transaction_changes = {}
+            self.transaction_deletes = {}
             self.explicit = False
             return 0
         if op == 'select':
@@ -122,6 +128,7 @@ class Engine:
         table = statement[2] if op == 'index' else statement[1]
         self.statement_changes = {}
         self.statement_vector_patches = {}
+        self.statement_deletes = {}
         if not self.explicit:
             self.storage.begin()
         saved = self.storage.savepoint()
@@ -134,6 +141,7 @@ class Engine:
                 self.storage.rollback()
             self.statement_changes = {}
             self.statement_vector_patches = {}
+            self.statement_deletes = {}
             raise
         # A vector-only update keeps row membership and hash slots, so the
         # snapshot can be patched in place instead of rebuilt. A rollback still
@@ -142,6 +150,17 @@ class Engine:
             self.vector_indexes.patch(identifier, column, rows)
             if self.explicit:
                 self.merge_change(self.transaction_changes, identifier, None)
+        # Deletes only add tombstones; the snapshot and filter caches stay.
+        for identifier, keys in self.statement_deletes.items():
+            snapshot = self.vector_indexes.delete_keys(identifier, keys)
+            if self.explicit:
+                entry = self.transaction_deletes.setdefault(identifier, [set(), None])
+                entry[0].update(keys)
+                # Keep the first snapshot the deletes landed on; a later rebuild
+                # during the transaction replaces it and forces full invalidation
+                # on rollback (the rebuilt snapshot lacks the deleted rows).
+                if snapshot is not None and entry[1] is None:
+                    entry[1] = snapshot
         # No query runs during a statement. Its old snapshots are still valid if
         # it fails and restores its savepoint, even after partial row writes.
         self.invalidate_changes(self.statement_changes)
@@ -251,6 +270,53 @@ class Engine:
                 if row is not None and self.matches(row, conditions):
                     yield row
                 return
+        # Range predicates on an integer primary key bound the probe set: the
+        # hash index answers each key directly, so a bounded range never
+        # scans the whole table. Mixed-type or open ranges fall back to a scan
+        # (the bounds below keep the probe set finite either way).
+        bounds = {}
+        for i, op, value in conditions:
+            if i != schema['pk'] or not isinstance(value, int) or isinstance(value, bool):
+                bounds = None
+                break
+            low, high = bounds.get(op, (None, None))
+            if op in ('>', '>='):
+                bounds[op] = (max(low, value) if low is not None else value, high)
+            elif op in ('<', '<='):
+                bounds[op] = (low, min(high, value) if high is not None else value)
+        if bounds:
+            lower = upper = None
+            for op, (low, high) in bounds.items():
+                if op in ('>', '>='):
+                    lower = max(lower, low) if lower is not None else low
+                    closed_low = op == '>='
+                else:
+                    upper = min(upper, high) if upper is not None else high
+                    closed_high = op == '<='
+            # The probe window is at most one key wider than the range on each
+            # side; matches() re-checks every condition, so the closed/open
+            # distinction does not need to be exact here.
+            if lower is not None and upper is not None and lower > upper + 1:
+                return
+            start = lower if lower is not None else None
+            stop = upper + 1 if upper is not None else None
+            # Both bounds present: probe exactly that window (at most one key
+            # wider than the range; matches() re-filters). An open side uses
+            # the table's key extent so the probe set stays bounded.
+            if start is None or stop is None:
+                lowest, highest = self.storage.index.key_extent(schema['id'])
+                if lowest is None:
+                    return  # Empty table.
+                if start is None:
+                    start = lowest
+                if stop is None:
+                    stop = highest + 1
+            if stop - start <= self.storage.index.count + 1:
+                for key in range(start, stop):
+                    row = self.storage.get(schema['id'], key)
+                    if row is not None and self.matches(row, conditions):
+                        yield row
+                return
         for row in self.storage.rows(schema['id']):
             if self.matches(row, conditions):
                 yield row
@@ -290,18 +356,23 @@ class Engine:
                         changed = tuple(changed)
                         changed_columns = {i for i, _ in updates if row[i] != changed[i]}
                     self.storage.append(('row', schema['id'], key, changed))
-                    vector_columns = ({i for i in changed_columns
-                                       if schema['columns'][i][1] == 'VECTOR'}
-                                      if changed_columns else set())
-                    if vector_columns:
-                        # Row membership and hash slots are unchanged; record the
-                        # new vectors so the snapshot can be patched in place.
-                        column = next(iter(vector_columns))
-                        self.statement_vector_patches.setdefault(
-                            schema['id'], (column, {}))[1][key] = changed
-                        self.note_change(schema, changed_columns - vector_columns)
+                    if updates is None:
+                        # Delete: a tombstone is enough; the snapshot and filter
+                        # caches stay valid until too many tombstones accumulate.
+                        self.statement_deletes.setdefault(schema['id'], set()).add(key)
                     else:
-                        self.note_change(schema, changed_columns)
+                        vector_columns = ({i for i in changed_columns
+                                           if schema['columns'][i][1] == 'VECTOR'}
+                                          if changed_columns else set())
+                        if vector_columns:
+                            # Row membership and hash slots are unchanged; record
+                            # the new vectors so the snapshot can be patched.
+                            column = next(iter(vector_columns))
+                            self.statement_vector_patches.setdefault(
+                                schema['id'], (column, {}))[1][key] = changed
+                            self.note_change(schema, changed_columns - vector_columns)
+                        else:
+                            self.note_change(schema, changed_columns)
                     count += 1
         finally:
             os.unlink(path)

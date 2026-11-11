@@ -132,6 +132,21 @@ class DiskHash:
             if t and (table is None or table == t):
                 yield t, key, value
 
+    def key_extent(self, table):
+        """Smallest and largest key of a table, or (None, None) if empty.
+
+        One pass over the slots; used to bound primary-key range probes.
+        """
+        lowest = highest = None
+        for i in range(self.capacity):
+            t, key, _ = SLOT.unpack_from(self.map, i * SLOT.size)
+            if t == table:
+                if lowest is None or key < lowest:
+                    lowest = key
+                if highest is None or key > highest:
+                    highest = key
+        return lowest, highest
+
     def _grow(self):
         replacement = DiskHash(None if self.anonymous else str(self.path) + '.resize',
                                self.capacity * 2, anonymous=self.anonymous)
