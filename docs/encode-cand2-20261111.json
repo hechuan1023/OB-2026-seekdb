@@ -1,0 +1,390 @@
+{
+  "version": "host-docker-v1",
+  "config": {
+    "image": "minivectordb:type-dispatch",
+    "output": ".local-encode-cand2.json",
+    "rows": 10000,
+    "dimensions": 128,
+    "queries": 1000,
+    "cycles": 8,
+    "rounds": 3,
+    "memory": 128,
+    "seed": 20261112
+  },
+  "image_id": "sha256:3356b7756ad538027d8bce0fa19d8b3138c340dea915529c593d7c580a7a7a54",
+  "source_sha256": {
+    "minivectordb/__init__.py": "813ab12de56c56e9a2964ebba4b5cf8a0af254a7c3e37e8843093ae05c3f8c13",
+    "minivectordb/__main__.py": "4f084e73f6aa7201e18c3f20783cd0c83a88c01af49bf03d3f6e33f806a634f6",
+    "minivectordb/build_native.py": "413fa35724165f877a97ea15c3d67e4faf31ef54f25864c17a3a9910f0579a72",
+    "minivectordb/engine.py": "7228830bea5c05eeca0400e4663e3ab3e09d9315556e44cb533332b04df84910",
+    "minivectordb/errors.py": "d65edb6fb0d6cecc232b0bc57ef4505fdaa6a005c3f544c6e0557094872310d3",
+    "minivectordb/json_protocol.py": "3bd5db1652210fb486dfe8f4e2ba8a3d913e781e83a00f9ed7340101ff1c74cb",
+    "minivectordb/native.py": "9294fed233b17adb0468dfc8fae5dfaac3f0e9d5c205027df92eb94a69855db5",
+    "minivectordb/protocol.py": "58431431e9228869bea4e3a24179a063fe35e975efd56514b130ab181d131d5a",
+    "minivectordb/sorting.py": "ba9fac1e55d1e346d1e5cd57848b8e8b967386fd12ea94159525ace58d78967d",
+    "minivectordb/sql.py": "ff54524452555e5f26e2d4ee946017fffbe5637c50a7095f986e36ccc25ff903",
+    "minivectordb/storage.py": "9de6c782fc9ee497d104a52cebc592f4928844d1956ba0f7823928256b8a8afc",
+    "minivectordb/vector_index.py": "d8e566bbca705fd24a3cfd42d87e79be4d18e7c9567bfef64a0558e35062bdf4"
+  },
+  "driver_sha256": {
+    "tests/container_benchmark.py": "6ae0b8288f2e8c991d5d4e7146bbcb3087e29161d1762a09dbf779de159f839d",
+    "tests/measure_entry.py": "1419d722123a81d64f96f13525d8ba7bcc0a38a6b6fc99689bdd7c5932d10f62",
+    "tests/benchmark.py": "097cf7f7a8f1138352624e81de8543a37a88a5801cb60676945b41e1e6760693",
+    "tests/test_recovery.py": "7230b78f06fdb672f879a8254b2c524b0894f216588d291a5b2a45ca200c736e"
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "startup_seconds": 0.43767579999985173,
+      "write_seconds": 1.8918930999934673,
+      "preparation_seconds": 0.1411569999763742,
+      "static_query": {
+        "count": 1000,
+        "total_seconds": 2.0315061001165304,
+        "median_seconds": 0.0017143999866675586,
+        "p95_seconds": 0.0035812999994959682
+      },
+      "filtered_query": {
+        "count": 500,
+        "total_seconds": 1.0112158000411,
+        "median_seconds": 0.0016562999953748658,
+        "p95_seconds": 0.0035812999994959682
+      },
+      "unfiltered_query": {
+        "count": 500,
+        "total_seconds": 1.0202903000754304,
+        "median_seconds": 0.0017801999929361045,
+        "p95_seconds": 0.0035117999941576272
+      },
+      "mixed": {
+        "read_only_commit": {
+          "count": 8,
+          "total_seconds": 0.09840490005444735,
+          "median_seconds": 0.01300690000061877,
+          "p95_seconds": 0.014092800003709272
+        },
+        "zero_match": {
+          "count": 8,
+          "total_seconds": 0.11480869998922572,
+          "median_seconds": 0.013827849994413555,
+          "p95_seconds": 0.017838999978266656
+        },
+        "text_update": {
+          "count": 8,
+          "total_seconds": 0.08895569999003783,
+          "median_seconds": 0.011327399988658726,
+          "p95_seconds": 0.015249999996740371
+        },
+        "filter_update": {
+          "count": 8,
+          "total_seconds": 0.3257801000145264,
+          "median_seconds": 0.04027660000429023,
+          "p95_seconds": 0.07243660002131946
+        },
+        "vector_update": {
+          "count": 8,
+          "total_seconds": 0.09446339998976327,
+          "median_seconds": 0.011651950000668876,
+          "p95_seconds": 0.015363399987109005
+        },
+        "failed_insert": {
+          "count": 8,
+          "total_seconds": 0.04047500004526228,
+          "median_seconds": 0.004933350006467663,
+          "p95_seconds": 0.00591599999461323
+        }
+      },
+      "snapshot_builds": {
+        "count": 1,
+        "logical_bytes": 5200000,
+        "seconds": 0.06954268800473073
+      },
+      "recovery_seconds": 0.64317339999252,
+      "recovery_builds": {
+        "count": 1,
+        "logical_bytes": 5200000,
+        "seconds": 0.06109514799754834
+      },
+      "write_resources": {
+        "memory.peak": "24510464",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6144000 rios=0 wios=210 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 750327\nuser_usec 625272\nsystem_usec 125054\nnr_periods 22\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 40316646\nwchar: 11455453\nsyscr: 25689\nsyscw: 10819\nread_bytes: 0\nwrite_bytes: 14340096\ncancelled_write_bytes: 8196096"
+      },
+      "static_resources": {
+        "memory.peak": "31318016",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=2 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=2 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6148096 rios=0 wios=212 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 1545002\nuser_usec 1361073\nsystem_usec 183928\nnr_periods 47\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 54499110\nwchar: 11704454\nsyscr: 66830\nsyscw: 61030\nread_bytes: 0\nwrite_bytes: 14348288\ncancelled_write_bytes: 8200192"
+      },
+      "mixed_resources": {
+        "memory.peak": "31473664",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=3 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=3 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6324224 rios=0 wios=256 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 1905474\nuser_usec 1639030\nsystem_usec 266443\nnr_periods 72\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 77629354\nwchar: 11764434\nsyscr: 147136\nsyscw: 63870\nread_bytes: 0\nwrite_bytes: 14884864\ncancelled_write_bytes: 8560640"
+      },
+      "recovery_resources": {
+        "memory.peak": "24981504",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 347421\nuser_usec 284634\nsystem_usec 62786\nnr_periods 5\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 19223153\nwchar: 10065\nsyscr: 40726\nsyscw: 11\nread_bytes: 0\nwrite_bytes: 4096\ncancelled_write_bytes: 0"
+      },
+      "all_results_verified": true,
+      "filtered_recall_at_10": 1.0,
+      "unfiltered_recall_at_10": 1.0,
+      "restart_content_verified": true
+    },
+    {
+      "round": 2,
+      "startup_seconds": 0.4844005999912042,
+      "write_seconds": 2.0845139999873936,
+      "preparation_seconds": 0.1336728000023868,
+      "static_query": {
+        "count": 1000,
+        "total_seconds": 1.9848898008349352,
+        "median_seconds": 0.0016567499988013878,
+        "p95_seconds": 0.003412699996260926
+      },
+      "filtered_query": {
+        "count": 500,
+        "total_seconds": 0.9497312005551066,
+        "median_seconds": 0.001561149998451583,
+        "p95_seconds": 0.003404300019610673
+      },
+      "unfiltered_query": {
+        "count": 500,
+        "total_seconds": 1.0351586002798285,
+        "median_seconds": 0.0017342000064672902,
+        "p95_seconds": 0.003412699996260926
+      },
+      "mixed": {
+        "read_only_commit": {
+          "count": 8,
+          "total_seconds": 0.08918020006967708,
+          "median_seconds": 0.010060650005470961,
+          "p95_seconds": 0.015715100016677752
+        },
+        "zero_match": {
+          "count": 8,
+          "total_seconds": 0.0801909999572672,
+          "median_seconds": 0.00940374999481719,
+          "p95_seconds": 0.014960500004235655
+        },
+        "text_update": {
+          "count": 8,
+          "total_seconds": 0.08497849997365847,
+          "median_seconds": 0.01065490000473801,
+          "p95_seconds": 0.011837300000479445
+        },
+        "filter_update": {
+          "count": 8,
+          "total_seconds": 0.34963139999308623,
+          "median_seconds": 0.045211949982331134,
+          "p95_seconds": 0.07646129999193363
+        },
+        "vector_update": {
+          "count": 8,
+          "total_seconds": 0.10790909998468123,
+          "median_seconds": 0.014236149989301339,
+          "p95_seconds": 0.02036460000090301
+        },
+        "failed_insert": {
+          "count": 8,
+          "total_seconds": 0.03971579996868968,
+          "median_seconds": 0.004247449993272312,
+          "p95_seconds": 0.0077892999979667366
+        }
+      },
+      "snapshot_builds": {
+        "count": 1,
+        "logical_bytes": 5200000,
+        "seconds": 0.059196115005761385
+      },
+      "recovery_seconds": 0.5915723999787588,
+      "recovery_builds": {
+        "count": 1,
+        "logical_bytes": 5200000,
+        "seconds": 0.059239638001599815
+      },
+      "write_resources": {
+        "memory.peak": "24506368",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6144000 rios=0 wios=210 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 790389\nuser_usec 627795\nsystem_usec 162594\nnr_periods 24\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 40316646\nwchar: 11455453\nsyscr: 25555\nsyscw: 10819\nread_bytes: 0\nwrite_bytes: 14340096\ncancelled_write_bytes: 8196096"
+      },
+      "static_resources": {
+        "memory.peak": "31318016",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=2 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=2 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6148096 rios=0 wios=212 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 1561131\nuser_usec 1307288\nsystem_usec 253842\nnr_periods 48\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 54499110\nwchar: 11704455\nsyscr: 66624\nsyscw: 61030\nread_bytes: 0\nwrite_bytes: 14348288\ncancelled_write_bytes: 8200192"
+      },
+      "mixed_resources": {
+        "memory.peak": "31383552",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=3 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=3 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6324224 rios=0 wios=256 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 1927580\nuser_usec 1591808\nsystem_usec 335772\nnr_periods 71\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 77629354\nwchar: 11764435\nsyscr: 146930\nsyscw: 63870\nread_bytes: 0\nwrite_bytes: 14884864\ncancelled_write_bytes: 8560640"
+      },
+      "recovery_resources": {
+        "memory.peak": "25202688",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 296211\nuser_usec 245432\nsystem_usec 50779\nnr_periods 5\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 19223153\nwchar: 10066\nsyscr: 40726\nsyscw: 11\nread_bytes: 0\nwrite_bytes: 4096\ncancelled_write_bytes: 0"
+      },
+      "all_results_verified": true,
+      "filtered_recall_at_10": 1.0,
+      "unfiltered_recall_at_10": 1.0,
+      "restart_content_verified": true
+    },
+    {
+      "round": 3,
+      "startup_seconds": 0.4577387000026647,
+      "write_seconds": 2.024006299994653,
+      "preparation_seconds": 0.14394959999481216,
+      "static_query": {
+        "count": 1000,
+        "total_seconds": 1.9391201998805627,
+        "median_seconds": 0.0015983499906724319,
+        "p95_seconds": 0.003404000017326325
+      },
+      "filtered_query": {
+        "count": 500,
+        "total_seconds": 0.9480663000140339,
+        "median_seconds": 0.0015135500143514946,
+        "p95_seconds": 0.00333360000513494
+      },
+      "unfiltered_query": {
+        "count": 500,
+        "total_seconds": 0.9910538998665288,
+        "median_seconds": 0.0016829000087454915,
+        "p95_seconds": 0.0034642000100575387
+      },
+      "mixed": {
+        "read_only_commit": {
+          "count": 8,
+          "total_seconds": 0.07376390002900735,
+          "median_seconds": 0.008970250011770986,
+          "p95_seconds": 0.010431400005472824
+        },
+        "zero_match": {
+          "count": 8,
+          "total_seconds": 0.09670609998283908,
+          "median_seconds": 0.01166390000435058,
+          "p95_seconds": 0.01342919998569414
+        },
+        "text_update": {
+          "count": 8,
+          "total_seconds": 0.09249629997066222,
+          "median_seconds": 0.009880400000838563,
+          "p95_seconds": 0.01923700000043027
+        },
+        "filter_update": {
+          "count": 8,
+          "total_seconds": 0.33032889995956793,
+          "median_seconds": 0.04124910000246018,
+          "p95_seconds": 0.07799719998729415
+        },
+        "vector_update": {
+          "count": 8,
+          "total_seconds": 0.09499029998551123,
+          "median_seconds": 0.011474150000140071,
+          "p95_seconds": 0.016408499999670312
+        },
+        "failed_insert": {
+          "count": 8,
+          "total_seconds": 0.036385799961863086,
+          "median_seconds": 0.004257849985151552,
+          "p95_seconds": 0.006596999999601394
+        }
+      },
+      "snapshot_builds": {
+        "count": 1,
+        "logical_bytes": 5200000,
+        "seconds": 0.06921690500166733
+      },
+      "recovery_seconds": 0.6089455999899656,
+      "recovery_builds": {
+        "count": 1,
+        "logical_bytes": 5200000,
+        "seconds": 0.0778487820061855
+      },
+      "write_resources": {
+        "memory.peak": "24920064",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6144000 rios=0 wios=210 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 824105\nuser_usec 642888\nsystem_usec 181216\nnr_periods 24\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 40316646\nwchar: 11455453\nsyscr: 25388\nsyscw: 10819\nread_bytes: 0\nwrite_bytes: 14340096\ncancelled_write_bytes: 8196096"
+      },
+      "static_resources": {
+        "memory.peak": "31322112",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=2 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=2 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6148096 rios=0 wios=212 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 1581071\nuser_usec 1303542\nsystem_usec 277528\nnr_periods 48\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 54499110\nwchar: 11704454\nsyscr: 66482\nsyscw: 61030\nread_bytes: 0\nwrite_bytes: 14348288\ncancelled_write_bytes: 8200192"
+      },
+      "mixed_resources": {
+        "memory.peak": "31637504",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=3 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=3 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=6324224 rios=0 wios=256 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 1933143\nuser_usec 1529885\nsystem_usec 403257\nnr_periods 72\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 77629354\nwchar: 11764434\nsyscr: 146789\nsyscw: 63870\nread_bytes: 0\nwrite_bytes: 14884864\ncancelled_write_bytes: 8560640"
+      },
+      "recovery_resources": {
+        "memory.peak": "25038848",
+        "memory.max": "134217728",
+        "memory.swap.max": "0",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "io.stat": "8:80 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:48 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0\n8:64 rbytes=0 wbytes=0 rios=0 wios=1 dbytes=0 dios=0",
+        "cpu.stat": "usage_usec 312058\nuser_usec 287422\nsystem_usec 24636\nnr_periods 4\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "process_io": "rchar: 19223153\nwchar: 10064\nsyscr: 40727\nsyscw: 11\nread_bytes: 0\nwrite_bytes: 4096\ncancelled_write_bytes: 0"
+      },
+      "all_results_verified": true,
+      "filtered_recall_at_10": 1.0,
+      "unfiltered_recall_at_10": 1.0,
+      "restart_content_verified": true
+    }
+  ],
+  "caveat": "Local comparison, not official T/B/M. Driver outside database cgroup. sync/cat probe included in memory/I/O. Cumulative per-device io.stat; no global cold-cache control. Recovery includes Docker startup. Snapshot bytes are logical output, not physical I/O.",
+  "medians": {
+    "write_seconds": 2.024006299994653,
+    "query_seconds": 1.9848898008349352,
+    "recovery_seconds": 0.6089455999899656,
+    "mixed_seconds": {
+      "read_only_commit": 0.08918020006967708,
+      "zero_match": 0.09670609998283908,
+      "text_update": 0.08895569999003783,
+      "filter_update": 0.33032889995956793,
+      "vector_update": 0.09499029998551123,
+      "failed_insert": 0.03971579996868968
+    }
+  }
+}

@@ -196,21 +196,25 @@ def _encode_row(record):
 
     The type byte lets read_record tell this apart from the older pickled
     records (which start with the pickle PROTO byte) without a WAL version bump.
+    Rows only ever hold int/str/array/None by construction (convert() rejects
+    every other type), so exact type() dispatch is safe and faster than the
+    isinstance chain; the on-disk bytes are identical.
     """
     _, table, key, row = record
     parts = [b'\x00' if row is None else b'\x01', struct.pack('<qq', table, key)]
     if row is not None:
         parts.append(struct.pack('<I', len(row)))
         for value in row:
-            if value is None:
-                parts.append(b'\x00')
-            elif isinstance(value, int):
+            kind = type(value)
+            if kind is int:
                 parts.append(b'\x01' + struct.pack('<q', value))
-            elif isinstance(value, str):
+            elif kind is str:
                 encoded = value.encode('utf-8')
                 parts.append(b'\x02' + struct.pack('<I', len(encoded)) + encoded)
-            elif isinstance(value, array):
+            elif kind is array:
                 parts.append(b'\x03' + struct.pack('<I', len(value)) + value.tobytes())
+            elif value is None:
+                parts.append(b'\x00')
             else:
                 raise TypeError('Unsupported row value')
     return b''.join(parts)
