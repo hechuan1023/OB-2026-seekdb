@@ -33,9 +33,12 @@
 ## 回归与验证范围
 
 - 宿主机 `unittest discover`：131 项通过（含新增 10 项独立反例）。
-- 公开题包 `run_public_cases`：20 组 × 2 路径 = 40 项通过。
+- 公开题包 `run_public_cases`：20 组 × 2 路径 = 40 项通过（宿主机与容器均通过）。
+- Linux 容器（2 CPU / 256 MiB / 断网，镜像 `minivectordb:delete-range` = `sha256:df33a54a…`）完整 unittest：131 项通过，21.99 s。
+- 容器生命周期 `docker_validation`（64 MiB）：读己之写/多行原子性/回滚、SIGKILL 保留已确认提交并丢弃未提交快照、EOF 回滚与同卷重启、PID 1 SIGTERM——4 项通过，无 OOM。
+- 容器 64 MiB 压力测试 `container_vector_pressure`（18,000 × 1,024 维）：`oom=0`、`oom_kill=0`、`oom_group_kill=0`，`memory_peak=67,108,864`，提交状态恢复与临时清理通过。
 - `validate_submission` 报 `Source changed: minivectordb/engine.py`——符合预期（源码已改而历史报告摘要绑定旧版），不重标历史结果。
-- 未执行：Linux 容器内完整 unittest、容器生命周期（SIGKILL/EOF/SIGTERM）、64 MiB 压力测试、官方 protocol_check。改动不触碰 WAL 格式与 fsync 顺序，但容器验证应在合并前补齐。
+- 未执行：官方 `protocol_check/run.py`（需 WSL/Linux 驱动环境）。
 
 ## 边界与限制
 
