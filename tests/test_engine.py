@@ -6,12 +6,23 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from minivectordb.engine import Engine, QueryResult
+from minivectordb.engine import Engine, QueryResult, convert
 from minivectordb.errors import DBError
 from minivectordb.protocol import statements
+from minivectordb.sql import Literal
 
 
 class EngineTests(unittest.TestCase):
+    def test_bigint_literal_sign_and_unicode_decimal_boundaries(self):
+        column = ('id', 'BIGINT', None)
+        for text, expected in [('+0001', 1), ('-0000', 0), ('-１２', -12),
+                               ('+٠١', 1), ('9223372036854775807', 9223372036854775807)]:
+            with self.subTest(text=text):
+                self.assertEqual(convert(Literal('number', text), column), expected)
+        for text in ('', '+', '-', '++1', '--1', '1.0', '1e1', '²', ' 1', '9223372036854775808'):
+            with self.subTest(text=text), self.assertRaises(DBError):
+                convert(Literal('number', text), column)
+
     def test_long_varchar_predicates_do_not_enforce_column_width(self):
         self.db.execute('CREATE TABLE t(id BIGINT PRIMARY KEY,s VARCHAR(2))')
         self.db.execute("INSERT INTO t VALUES (1,'ab'),(2,'中')")

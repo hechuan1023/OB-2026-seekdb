@@ -1,0 +1,65 @@
+{
+  "device": "8:64",
+  "mounts": [
+    "1252 1243 8:64 /data/docker/volumes/mvdb-io-probe-1b7b95acc4c9/_data /data rw,relatime master:57 - ext4 /dev/sde rw"
+  ],
+  "bytes_written_by_test": 8388608,
+  "device_write_bytes_before": 0,
+  "device_write_bytes_after": 8388608,
+  "device_write_bytes_delta": 8388608,
+  "bytes_read_by_test": 8388608,
+  "device_read_bytes_delta": 8388608,
+  "io_before": {},
+  "io_after_write": {
+    "8:80": {
+      "rbytes": "0",
+      "wbytes": "0",
+      "rios": "0",
+      "wios": "1",
+      "dbytes": "0",
+      "dios": "0"
+    },
+    "8:48": {
+      "rbytes": "0",
+      "wbytes": "0",
+      "rios": "0",
+      "wios": "1",
+      "dbytes": "0",
+      "dios": "0"
+    },
+    "8:64": {
+      "rbytes": "0",
+      "wbytes": "8388608",
+      "rios": "0",
+      "wios": "9",
+      "dbytes": "0",
+      "dios": "0"
+    }
+  },
+  "io_after_read": {
+    "8:80": {
+      "rbytes": "0",
+      "wbytes": "0",
+      "rios": "0",
+      "wios": "1",
+      "dbytes": "0",
+      "dios": "0"
+    },
+    "8:48": {
+      "rbytes": "0",
+      "wbytes": "0",
+      "rios": "0",
+      "wios": "1",
+      "dbytes": "0",
+      "dios": "0"
+    },
+    "8:64": {
+      "rbytes": "8388608",
+      "wbytes": "8388608",
+      "rios": "8",
+      "wios": "9",
+      "dbytes": "0",
+      "dios": "0"
+    }
+  }
+}
