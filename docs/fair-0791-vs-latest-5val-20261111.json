@@ -1,0 +1,401 @@
+{
+  "images": [
+    "minivectordb:fair-0791",
+    "minivectordb:fair-latest"
+  ],
+  "rows": 10000,
+  "dimensions": 128,
+  "groups": 5,
+  "queries": 1000,
+  "projection": "numeric",
+  "seed": 20261110,
+  "rounds": [
+    {
+      "image": "minivectordb:fair-0791",
+      "round": 1,
+      "write_seconds": 2.1090203000057954,
+      "filtered_seconds": 1.0698937004199252,
+      "unfiltered_seconds": 1.2027661002939567,
+      "query_seconds": 2.272659800713882,
+      "after_write": {
+        "device": "8:64",
+        "io": {
+          "8:80": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "8605696",
+            "rios": "0",
+            "wios": "265",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 28192768
+      },
+      "after_query": {
+        "device": "8:64",
+        "io": {
+          "8:80": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "2",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "2",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "13811712",
+            "rios": "0",
+            "wios": "274",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 40198144
+      },
+      "verified_rows_after_restart": 10000
+    },
+    {
+      "image": "minivectordb:fair-latest",
+      "round": 1,
+      "write_seconds": 1.7489039000065532,
+      "filtered_seconds": 1.0024699003261048,
+      "unfiltered_seconds": 1.1151477997773327,
+      "query_seconds": 2.1176177001034375,
+      "after_write": {
+        "device": "8:64",
+        "io": {
+          "8:80": {},
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "6094848",
+            "rios": "0",
+            "wios": "212",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 27787264
+      },
+      "after_query": {
+        "device": "8:64",
+        "io": {
+          "8:80": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "2",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "6127616",
+            "rios": "0",
+            "wios": "216",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 38903808
+      },
+      "verified_rows_after_restart": 10000
+    },
+    {
+      "image": "minivectordb:fair-0791",
+      "round": 2,
+      "write_seconds": 1.9073421999928541,
+      "filtered_seconds": 1.0382524999731686,
+      "unfiltered_seconds": 1.1466772002168,
+      "query_seconds": 2.1849297001899686,
+      "after_write": {
+        "device": "8:64",
+        "io": {
+          "8:80": {},
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "8605696",
+            "rios": "0",
+            "wios": "264",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 28041216
+      },
+      "after_query": {
+        "device": "8:64",
+        "io": {
+          "8:80": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "2",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "13811712",
+            "rios": "0",
+            "wios": "273",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 39837696
+      },
+      "verified_rows_after_restart": 10000
+    },
+    {
+      "image": "minivectordb:fair-latest",
+      "round": 2,
+      "write_seconds": 1.6221719999739435,
+      "filtered_seconds": 0.9663776000379585,
+      "unfiltered_seconds": 1.0567447000939865,
+      "query_seconds": 2.023122300131945,
+      "after_write": {
+        "device": "8:64",
+        "io": {
+          "8:80": {},
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "6094848",
+            "rios": "0",
+            "wios": "211",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 27385856
+      },
+      "after_query": {
+        "device": "8:64",
+        "io": {
+          "8:80": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "2",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "6127616",
+            "rios": "0",
+            "wios": "214",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 38924288
+      },
+      "verified_rows_after_restart": 10000
+    },
+    {
+      "image": "minivectordb:fair-0791",
+      "round": 3,
+      "write_seconds": 1.8455094000091776,
+      "filtered_seconds": 1.076278599910438,
+      "unfiltered_seconds": 1.2031327001168393,
+      "query_seconds": 2.2794113000272773,
+      "after_write": {
+        "device": "8:64",
+        "io": {
+          "8:80": {},
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "8605696",
+            "rios": "0",
+            "wios": "264",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 28110848
+      },
+      "after_query": {
+        "device": "8:64",
+        "io": {
+          "8:80": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "2",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "13811712",
+            "rios": "0",
+            "wios": "271",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 39845888
+      },
+      "verified_rows_after_restart": 10000
+    },
+    {
+      "image": "minivectordb:fair-latest",
+      "round": 3,
+      "write_seconds": 1.8802065000054426,
+      "filtered_seconds": 0.9965817997872364,
+      "unfiltered_seconds": 1.0800501999037806,
+      "query_seconds": 2.076631999691017,
+      "after_write": {
+        "device": "8:64",
+        "io": {
+          "8:80": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "1",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "6094848",
+            "rios": "0",
+            "wios": "212",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 27643904
+      },
+      "after_query": {
+        "device": "8:64",
+        "io": {
+          "8:80": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "2",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:48": {
+            "rbytes": "0",
+            "wbytes": "0",
+            "rios": "0",
+            "wios": "2",
+            "dbytes": "0",
+            "dios": "0"
+          },
+          "8:64": {
+            "rbytes": "0",
+            "wbytes": "6127616",
+            "rios": "0",
+            "wios": "216",
+            "dbytes": "0",
+            "dios": "0"
+          }
+        },
+        "memory_peak_bytes": 39284736
+      },
+      "verified_rows_after_restart": 10000
+    }
+  ],
+  "notes": "Write snapshot is cumulative since startup; query snapshot is cumulative since startup including load and index. Sampler runs in cgroup. Restart verification is outside measurement. No cold-cache control or post-cgroup writeback capture; local device counters are not the official B."
+}

@@ -1,0 +1,59 @@
+{
+  "images": [
+    "minivectordb:fair-0791",
+    "minivectordb:fair-latest"
+  ],
+  "groups": 5,
+  "queries": 1000,
+  "rounds": [
+    {
+      "image": "minivectordb:fair-0791",
+      "write_seconds": 2.070062200014945,
+      "query_seconds": 2.2191355995601043,
+      "filtered_seconds": 1.055454600136727,
+      "unfiltered_seconds": 1.1636809994233772,
+      "round": 1
+    },
+    {
+      "image": "minivectordb:fair-latest",
+      "write_seconds": 1.9085358000011183,
+      "query_seconds": 2.159391100227367,
+      "filtered_seconds": 1.0234433001023717,
+      "unfiltered_seconds": 1.1359478001249954,
+      "round": 1
+    },
+    {
+      "image": "minivectordb:fair-0791",
+      "write_seconds": 2.1297482999798376,
+      "query_seconds": 2.438477799849352,
+      "filtered_seconds": 1.1569771999202203,
+      "unfiltered_seconds": 1.2815005999291316,
+      "round": 2
+    },
+    {
+      "image": "minivectordb:fair-latest",
+      "write_seconds": 1.806173300021328,
+      "query_seconds": 2.0635199996177107,
+      "filtered_seconds": 0.976464999577729,
+      "unfiltered_seconds": 1.0870550000399817,
+      "round": 2
+    },
+    {
+      "image": "minivectordb:fair-0791",
+      "write_seconds": 2.086836200003745,
+      "query_seconds": 2.2043997998989653,
+      "filtered_seconds": 1.0475820999126881,
+      "unfiltered_seconds": 1.1568176999862771,
+      "round": 3
+    },
+    {
+      "image": "minivectordb:fair-latest",
+      "write_seconds": 2.0334186000109185,
+      "query_seconds": 1.8505732003541198,
+      "filtered_seconds": 0.8836117002065293,
+      "unfiltered_seconds": 0.9669615001475904,
+      "round": 3
+    }
+  ],
+  "caveat": "Cold-start query phase (container restarted after write). Local paired measurement; not official T/B/M or score."
+}
