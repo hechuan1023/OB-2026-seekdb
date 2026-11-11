@@ -190,6 +190,17 @@ class DiskHash:
             self.file.close()
             self.file = None
 
+    def reset(self):
+        """Empty the hash for reuse: zero the slots, keep the mapping.
+
+        The table is empty when every slot's table id is zero; extents and
+        count follow. Grown capacity is retained so a later transaction that
+        needed it does not regrow.
+        """
+        self.map[:] = bytes(len(self.map))
+        self.count = 0
+        self.extents = {}
+
 
 def _encode_row(record):
     """Compact row encoding: flag, table, key, then one tagged value each.
@@ -361,6 +372,9 @@ class Storage:
         self.base_schemas = None
         self.stage = None
         self.overlay = None
+        # True while a transaction is staged; the files stay open across
+        # transactions for reuse, so the stage handle alone cannot signal this.
+        self.active = False
         self.cache_limit = cache_memory
         self.cache_bytes = 0
         self.cache = OrderedDict()
@@ -443,11 +457,22 @@ class Storage:
                 index.put(table, key, value)
 
     def begin(self):
-        if self.stage is not None:
+        if self.active:
             raise RuntimeError('Internal nested transaction')
         self.base_schemas = copy.deepcopy(self.schemas)
-        self.stage = open(self.directory / 'transaction.stage', 'w+b', buffering=0)
-        self.overlay = DiskHash(self.directory / 'transaction.idx')
+        self.active = True
+        if self.stage is None:
+            # The stage is scratch: never authoritative, never synced, and
+            # startup unlinks any crash leftover. Keep one file open across
+            # transactions instead of paying open/close/unlink per statement.
+            self.stage = open(self.directory / 'transaction.stage', 'w+b', buffering=0)
+        else:
+            self.stage.truncate(0)
+            self.stage.seek(0)
+        if self.overlay is None:
+            self.overlay = DiskHash(self.directory / 'transaction.idx')
+        else:
+            self.overlay.reset()
 
     def savepoint(self):
         return self.stage.seek(0, os.SEEK_END), copy.deepcopy(self.schemas)
@@ -456,8 +481,7 @@ class Storage:
         end, schemas = savepoint
         self.stage.truncate(end)
         self.schemas = schemas
-        self.overlay.close()
-        self.overlay = DiskHash(self.directory / 'transaction.idx')
+        self.overlay.reset()
         for offset, record, _ in records_buffered(self.stage, 0, end):
             if record[0] == 'row':
                 self._apply(record, offset, self.overlay)
@@ -503,7 +527,7 @@ class Storage:
         The old WAL remains authoritative until the completely synced replacement
         is renamed. This operation is forbidden while a transaction is staged.
         """
-        if self.stage is not None:
+        if self.active:
             raise RuntimeError('Cannot checkpoint an active transaction')
         temporary = self.directory / 'checkpoint.wal'
         with open(temporary, 'w+b') as output:
@@ -544,11 +568,15 @@ class Storage:
         self._finish()
 
     def _finish(self):
-        self.stage.close()
-        self.overlay.close()
-        self.stage = self.overlay = self.base_schemas = None
-        for name in ('transaction.stage', 'transaction.idx'):
-            (self.directory / name).unlink(missing_ok=True)
+        # Keep the stage file and overlay mapping open for the next begin();
+        # both are scratch state, never authoritative. Clear the overlay now
+        # so no reader can see this transaction's staged entries afterwards;
+        # begin() resets both again. Storage.close() releases the files, and
+        # startup unlinks crash leftovers.
+        self.active = False
+        self.base_schemas = None
+        if self.overlay is not None:
+            self.overlay.reset()
 
     def get(self, table, key):
         offset = self.overlay.get(table, key) if self.overlay is not None else None
@@ -592,7 +620,15 @@ class Storage:
                     yield self.read_row(self.stage, offset - 1)
 
     def close(self):
-        if self.stage is not None:
+        if self.active:
             self.rollback()
+        if self.stage is not None:
+            self.stage.close()
+            self.stage = None
+        if self.overlay is not None:
+            self.overlay.close()
+            self.overlay = None
+        for name in ('transaction.stage', 'transaction.idx'):
+            (self.directory / name).unlink(missing_ok=True)
         self.index.close()
         self.wal.close()
