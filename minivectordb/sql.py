@@ -17,18 +17,30 @@ TOKEN = re.compile(
     r"|(?P<name>[A-Za-z_][A-Za-z_0-9]*)|(?P<symbol><=|>=|<>|!=|[(),;*=<>])"
 )
 
+# Exactly one alternative matches per token, so lastindex identifies it.
+# Indexed by group number to skip the lastgroup string lookup per token;
+# the mapping is pinned by TOKEN_GROUPS == list(TOKEN.groupindex).
+TOKEN_GROUPS = [None] + list(TOKEN.groupindex)
+
 
 class Parser:
     def __init__(self, sql):
-        self.tokens = []
+        tokens = []
+        append = tokens.append
+        match = TOKEN.match
+        groups = TOKEN_GROUPS
         pos = 0
-        while pos < len(sql):
-            match = TOKEN.match(sql, pos)
-            require(match is not None, 'SYNTAX_ERROR', f'Unexpected input at character {pos}')
-            kind, value = match.lastgroup, match.group()
-            pos = match.end()
-            if kind not in ('space', 'comment'):
-                self.tokens.append((kind, value))
+        length = len(sql)
+        while pos < length:
+            token = match(sql, pos)
+            if token is None:
+                raise DBError('SYNTAX_ERROR', f'Unexpected input at character {pos}')
+            kind = groups[token.lastindex]
+            value = token.group()
+            pos = token.end()
+            if kind != 'space' and kind != 'comment':
+                append((kind, value))
+        self.tokens = tokens
         self.pos = 0
 
     def peek(self, value=None):

@@ -200,3 +200,9 @@ extent 缓存版本的容器回归（镜像 `minivectordb:extent-cache`）：131
 `modify()` 原来对每条 UPDATE/DELETE 都创建临时文件（mkstemp + 写 + 读回 + unlink，宿主机实测 **683 µs/语句**）——即使只匹配 1 行。改为混合路径：候选行 ≤ 4,096 时缓冲在内存列表；超出则中途倾倒到临时文件继续（语句原子性不变：两条路径都在首次修改前冻结全部候选）。INSERT 不经过 `modify()`，官方写入路径代码逐字节不变。
 
 **测量**（2,000 条单行 UPDATE 交替 4 轮）：基线中位 9.687 s → 候选 6.136 s（**-37%**，4 对全部更快，每语句 4.8 → 3.1 ms）；标准负载（纯 INSERT）写入路径代码相同，轮间差异为宿主机噪声。新增 `tests/test_modify_buffer.py` 4 项反例：边界两侧（4,095/4,096/4,097/+50 行）UPDATE 行为一致、跨边界 DELETE、失败语句无临时文件残留且 savepoint 恢复、事务内可见性与回滚后一致性。153 项 unittest（宿主机+容器）、公开题包 40 项、生命周期 4 项、64 MiB 压力（`oom=0`、`oom_kill=0`）全部通过。
+
+## 词法分析 lastindex 分派（2026-11-12，f44c46eed 之后）
+
+`Parser.__init__` 每个词素做 `match.lastgroup`（字符串查找）+ `match.group()`；改为按 `match.lastindex` 从 `TOKEN_GROUPS` 数组取类别名（每个词素恰好命中一个交替分支，lastindex 唯一标识它），并把循环局部化（append/match/length 绑定）。分组映射由 `tests/test_tokenizer_mapping.py` 钉死（`TOKEN_GROUPS[1:] == list(TOKEN.groupindex)`，4 项反例含全词类往返、引号值保留、非法输入报错）。
+
+**测量**：267 KB 批量 INSERT 解析 1.186 → 0.912 ms（**-23%**）；端到端写入 4 轮交替 1.501 → 1.491 s（-0.7%，3 快 1 慢，子噪声——组件收益真实但占比约 1%）。零风险保留：token 序列逐项相同，容器内词法占比更高（from_chars 解析更快）时收益更大。宿主机+容器 157 项 unittest、公开题包 40 项通过。
