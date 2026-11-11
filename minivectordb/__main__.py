@@ -13,7 +13,7 @@ def main():
     parser.add_argument('--data-dir', default='/data')
     parser.add_argument('--mode', choices=('exact', 'ann'), default='exact')
     parser.add_argument('--sort-memory-mib', type=float, default=4)
-    parser.add_argument('--cache-memory-mib', type=float, default=4)
+    parser.add_argument('--cache-memory-mib', type=float, default=16)
     parser.add_argument('--checkpoint-mib', type=float, default=64)
     parser.add_argument('--no-ready', action='store_true')
     parser.add_argument('--disable-native', action='store_true')

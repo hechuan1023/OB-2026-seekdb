@@ -66,7 +66,7 @@ _VECTOR_NUMERIC_TYPES = frozenset({int, float})
 
 
 class Engine:
-    def __init__(self, directory, sort_memory=4 * 1024 * 1024, mode='exact', cache_memory=4 * 1024 * 1024,
+    def __init__(self, directory, sort_memory=4 * 1024 * 1024, mode='exact', cache_memory=16 * 1024 * 1024,
                  checkpoint_bytes=64 * 1024 * 1024, native=True):
         require(mode in ('exact', 'ann'), 'UNSUPPORTED', 'Unknown search mode')
         require(sort_memory >= 4096, 'TYPE_ERROR', 'Sort memory must be at least 4096 bytes')
