@@ -297,6 +297,62 @@ def records(file, start, end):
         position = next_position
 
 
+RECORD_BLOCK = 1 << 20
+
+
+def records_buffered(file, start, end):
+    """Sequential record scan with block reads instead of two reads per record.
+
+    Yields exactly the same (offset, record, payload-length) tuples as records();
+    only the read granularity differs. Random-access callers (read_row) keep the
+    unbuffered path so the WAL file position stays predictable for them.
+    """
+    position = start
+    block = b''
+    base = start  # File offset of block[0].
+    while position < end:
+        # Refill whenever the block cannot even hold the next length header; a
+        # short read at the transaction end is fine because end bounds the scan.
+        if position + LENGTH.size > base + len(block):
+            file.seek(position)
+            block = file.read(min(RECORD_BLOCK, end - position))
+            base = position
+            if len(block) < LENGTH.size:
+                raise RuntimeError('Truncated record length')
+        offset_in_block = position - base
+        length, = LENGTH.unpack_from(block, offset_in_block)
+        payload_start = position + LENGTH.size
+        crossing = payload_start + length > end
+        if payload_start + length > base + len(block):
+            file.seek(payload_start)
+            payload = file.read(length)
+            if len(payload) != length:
+                raise RuntimeError('Truncated record')
+        else:
+            payload = block[offset_in_block + LENGTH.size:
+                            offset_in_block + LENGTH.size + length]
+        if crossing:
+            # Match the unbuffered order: decode first (which may raise on a
+            # malformed payload exactly like read_record), then reject.
+            kind = payload[:1]
+            if kind == b'\x01':
+                _decode_row(payload)
+            elif kind == b'\x00':
+                pickle.loads(payload[1:])
+            else:
+                pickle.loads(payload)
+            raise RuntimeError('Record crosses transaction boundary')
+        kind = payload[:1]
+        if kind == b'\x01':
+            record = _decode_row(payload)
+        elif kind == b'\x00':
+            record = pickle.loads(payload[1:])
+        else:
+            record = pickle.loads(payload)  # Older pickled record (starts with PROTO).
+        yield position, record, length
+        position = payload_start + length
+
+
 class Storage:
     def __init__(self, directory, cache_memory=16 * 1024 * 1024, checkpoint_bytes=64 * 1024 * 1024):
         self.directory = Path(directory)
@@ -359,7 +415,7 @@ class Storage:
                 remaining -= len(chunk)
             if crc != checksum:
                 raise RuntimeError('WAL checksum mismatch')
-            for offset, record, length in records(self.wal, start, end):
+            for offset, record, length in records_buffered(self.wal, start, end):
                 self._apply(record, offset, self.index, length)
                 failpoint('during_recovery')
             position = end + TRAILER.size
@@ -402,7 +458,7 @@ class Storage:
         self.schemas = schemas
         self.overlay.close()
         self.overlay = DiskHash(self.directory / 'transaction.idx')
-        for offset, record, _ in records(self.stage, 0, end):
+        for offset, record, _ in records_buffered(self.stage, 0, end):
             if record[0] == 'row':
                 self._apply(record, offset, self.overlay)
         self.stage.seek(end)
@@ -434,7 +490,7 @@ class Storage:
         write_all(self.wal, TRAILER.pack(b'DONE', end))
         os.fsync(self.wal.fileno())
         failpoint('after_commit_sync')
-        for offset, record, length in records(self.wal, start, start + end):
+        for offset, record, length in records_buffered(self.wal, start, start + end):
             self._apply(record, offset, self.index, length)
         self._finish()
         wal_bytes = os.fstat(self.wal.fileno()).st_size
