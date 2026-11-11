@@ -9,3 +9,4 @@
 - Use `python -m unittest discover -v` for the correctness suite. Add independent counterexamples for behavior changes, especially transaction and recovery changes.
 - Record real commands and results. Never invent student reasoning, user dialogue, experiments, official test results, or a benchmark score in `agent/conversation.json`.
 - Do not treat local Windows or tracemalloc results as Linux cgroup validation.
+- Apply `docs/performance-acceptance.md` to every performance change. Do not present or promote a candidate as an overall improvement when a measured dimension has a reproducible regression; improve or revert it, and label insufficiently measured dimensions as unresolved.
