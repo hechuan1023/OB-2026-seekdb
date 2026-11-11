@@ -145,3 +145,7 @@ extent 缓存版本的容器回归（镜像 `minivectordb:extent-cache`）：131
 新增 `tests/test_transaction_reuse.py` 6 项独立反例：回滚后 overlay 不可见（含点查）、失败语句保留 savepoint 前暂存、连续事务隔离、复用句柄存活性、close 释放并删除暂存文件后可重开、崩溃残留启动清理。另验证 overlay 扩容（1024→2048）后回滚再提交的正确性。
 
 回归：宿主机 142 项、容器 142 项 unittest、公开题包 40 项、生命周期 4 项、64 MiB 压力（`oom=0`、`oom_kill=0`）全部通过。逐轮数据见 `txnreuse-*-20261111.json`。
+
+## 已测回退：commit 从 overlay 应用索引（2026-11-11，4a75100e3 之后）
+
+设计：commit 时跳过 WAL 重读，直接遍历 overlay 条目计算 WAL 偏移（stage 逐字节拷贝，偏移可推导），`txn_bytes` 在 append 时累计、savepoint/restore 回退。正确性验证充分（混合负载 72 键恢复与提交状态逐键一致、同事务覆盖版本、删后重插、savepoint 字节回退、checkpoint 阈值触发，5 项反例全过）。但宿主机 4 轮交替：写入中位 1.599 → 1.594 s（-0.3%，2 对快 2 对慢）、恢复 0.437 → 0.422 s（-3.4%，接近噪声）——缓冲读取器已把重读成本压到约 1%，overlay 遍历（每键一次哈希探测）成本相当，净收益为零。按验收规则回退：无可靠收益不为正确性风险买单。结论记录：commit 重读在缓冲化之后不是瓶颈。
