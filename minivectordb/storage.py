@@ -194,10 +194,17 @@ class DiskHash:
         """Empty the hash for reuse: zero the slots, keep the mapping.
 
         The table is empty when every slot's table id is zero; extents and
-        count follow. Grown capacity is retained so a later transaction that
-        needed it does not regrow.
+        count follow. Zeroing runs in bounded chunks so a grown mapping never
+        allocates a map-sized temporary. Grown capacity is retained so a
+        later transaction that needed it does not regrow; _finish shrinks a
+        grown overlay so small transactions never keep paying for a big one.
         """
-        self.map[:] = bytes(len(self.map))
+        map_ = self.map
+        size = len(map_)
+        zero = b'\0' * 65536
+        for offset in range(0, size, 65536):
+            end = min(offset + 65536, size)
+            map_[offset:end] = zero[:end - offset]
         self.count = 0
         self.extents = {}
 
@@ -372,6 +379,9 @@ class Storage:
         self.base_schemas = None
         self.stage = None
         self.overlay = None
+        # The overlay's starting size; a transaction that grows it pays one
+        # rebuild at finish so later small transactions stay cheap.
+        self.overlay_initial_capacity = 1024
         # True while a transaction is staged; the files stay open across
         # transactions for reuse, so the stage handle alone cannot signal this.
         self.active = False
@@ -571,12 +581,19 @@ class Storage:
         # Keep the stage file and overlay mapping open for the next begin();
         # both are scratch state, never authoritative. Clear the overlay now
         # so no reader can see this transaction's staged entries afterwards;
-        # begin() resets both again. Storage.close() releases the files, and
-        # startup unlinks crash leftovers.
+        # begin() resets both again. A transaction that grew the overlay
+        # shrinks it back to the initial capacity so later small
+        # transactions do not keep zeroing (and resident-tracking) a large
+        # mapping. Storage.close() releases the files, and startup unlinks
+        # crash leftovers.
         self.active = False
         self.base_schemas = None
         if self.overlay is not None:
-            self.overlay.reset()
+            if self.overlay.capacity > self.overlay_initial_capacity:
+                self.overlay.close()
+                self.overlay = DiskHash(self.directory / 'transaction.idx')
+            else:
+                self.overlay.reset()
 
     def get(self, table, key):
         offset = self.overlay.get(table, key) if self.overlay is not None else None
