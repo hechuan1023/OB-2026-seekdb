@@ -1,0 +1,70 @@
+{
+  "baseline": "E:/MINIOB/mini-ob/_build/minivectordb-extent-base",
+  "candidate": "E:/MINIOB/mini-ob/minivectordb-round2",
+  "rows": 10000,
+  "dimensions": 128,
+  "cycles": 50,
+  "rounds": 3,
+  "seed": 20261111,
+  "pairs": [
+    {
+      "round": 0,
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "results": {
+        "baseline": {
+          "delete_seconds": 0.905377,
+          "query_seconds": 0.864651,
+          "rows_remaining": 6397
+        },
+        "candidate": {
+          "delete_seconds": 0.954128,
+          "query_seconds": 0.716475,
+          "rows_remaining": 6397
+        }
+      }
+    },
+    {
+      "round": 1,
+      "order": [
+        "candidate",
+        "baseline"
+      ],
+      "results": {
+        "candidate": {
+          "delete_seconds": 0.8909,
+          "query_seconds": 0.7761,
+          "rows_remaining": 6397
+        },
+        "baseline": {
+          "delete_seconds": 1.011222,
+          "query_seconds": 0.815304,
+          "rows_remaining": 6397
+        }
+      }
+    },
+    {
+      "round": 2,
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "results": {
+        "baseline": {
+          "delete_seconds": 1.05745,
+          "query_seconds": 0.912144,
+          "rows_remaining": 6397
+        },
+        "candidate": {
+          "delete_seconds": 0.941845,
+          "query_seconds": 0.683335,
+          "rows_remaining": 6397
+        }
+      }
+    }
+  ],
+  "workload_version": 2,
+  "caveat": "Local paired host measurement; not official T/B/M or score"
+}

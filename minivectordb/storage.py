@@ -84,6 +84,10 @@ class DiskHash:
         # Little-endian hosts can probe slots through a cast view, avoiding a
         # tuple per probe. Big-endian hosts keep the portable struct path.
         self.view = memoryview(self.map).cast('q') if sys.byteorder == 'little' else None
+        # Keys never leave the hash (deletes keep their slot with a negative
+        # offset), so each table's key extent only grows. Maintained on insert,
+        # it bounds primary-key range probes without a slot scan.
+        self.extents = {}
 
     def _slot(self, table, key):
         slot = hash_key(table, key) & (self.capacity - 1)
@@ -114,6 +118,8 @@ class DiskHash:
             self._grow()
             slot, t, _ = self._slot(table, key)
         SLOT.pack_into(self.map, slot * SLOT.size, table, key, value)
+        if not t:
+            self._widen(table, key)
         self.count += int(not t)
 
     def replace(self, table, key, value):
@@ -123,8 +129,18 @@ class DiskHash:
             self._grow()
             slot, t, old = self._slot(table, key)
         SLOT.pack_into(self.map, slot * SLOT.size, table, key, value)
+        if not t:
+            self._widen(table, key)
         self.count += int(not t)
         return old if t else None
+
+    def _widen(self, table, key):
+        low, high = self.extents.get(table, (None, None))
+        if low is None or key < low:
+            low = key
+        if high is None or key > high:
+            high = key
+        self.extents[table] = low, high
 
     def entries(self, table=None):
         for i in range(self.capacity):
@@ -135,17 +151,11 @@ class DiskHash:
     def key_extent(self, table):
         """Smallest and largest key of a table, or (None, None) if empty.
 
-        One pass over the slots; used to bound primary-key range probes.
+        Maintained incrementally on insert; keys never leave the hash (a
+        delete keeps its slot with a negative offset), so the cached extent
+        only ever grows and stays valid.
         """
-        lowest = highest = None
-        for i in range(self.capacity):
-            t, key, _ = SLOT.unpack_from(self.map, i * SLOT.size)
-            if t == table:
-                if lowest is None or key < lowest:
-                    lowest = key
-                if highest is None or key > highest:
-                    highest = key
-        return lowest, highest
+        return self.extents.get(table, (None, None))
 
     def _grow(self):
         replacement = DiskHash(None if self.anonymous else str(self.path) + '.resize',
@@ -158,11 +168,13 @@ class DiskHash:
             self.map, self.view = replacement.map, replacement.view
             replacement.map = replacement.view = None
             self.capacity, self.count = replacement.capacity, replacement.count
+            self.extents = replacement.extents
             return
         replacement.close()
         os.replace(replacement.path, self.path)
         self.capacity = replacement.capacity
         self.count = replacement.count
+        self.extents = replacement.extents
         self.file = open(self.path, 'r+b')
         self.map = mmap.mmap(self.file.fileno(), 0)
         self.view = memoryview(self.map).cast('q') if sys.byteorder == 'little' else None
