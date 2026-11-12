@@ -51,8 +51,11 @@ class IndexLifecycleTests(unittest.TestCase):
         self.query(where="WHERE content='old'")
         original = self.snapshot()
         filters = self.db.vector_indexes.filters
-        tag_key = next(key for key in filters if key[1][0][0] == 1)
-        content_key = next(key for key in filters if key[1][0][0] == 2)
+        table_id = self.db.table('a')['id']
+        tag_key = next(key for key in filters
+                       if key[0] == table_id and key[1][0][0] == 1)
+        content_key = next(key for key in filters
+                           if key[0] == table_id and key[1][0][0] == 2)
         tag_positions = filters[tag_key][0]
         self.db.execute("UPDATE a SET content='new' WHERE id=1")
         self.assertIs(self.snapshot(), original)

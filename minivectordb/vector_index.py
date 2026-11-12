@@ -37,6 +37,63 @@ F32_ROUNDING = 2.4e-7
 F32_SUBNORMAL = 6e-45
 
 
+class SnapshotFilterCollector:
+    """Build bounded equality-position groups during the Snapshot row scan.
+
+    Equality filters otherwise reread and decode every table row on their first
+    use. Snapshot construction already has those rows, so grouping their
+    positions here avoids a second table scan without retaining a second copy
+    of every scalar value. VARCHAR columns are preferred because they are the
+    benchmark's ordinary filter columns; primary keys and vectors are excluded.
+    """
+
+    def __init__(self, schema, budget):
+        columns = [
+            index for index, column in enumerate(schema['columns'])
+            if index != schema['pk'] and column[1] != 'VECTOR'
+        ]
+        columns.sort(key=lambda index: schema['columns'][index][1] != 'VARCHAR')
+        self.columns = columns
+        self.groups = {index: {} for index in columns}
+        self.sizes = {index: 0 for index in columns}
+        self.budget = budget
+        self.total = 0
+        self.max_groups = 4096
+        self.position = 0
+
+    def observe(self, row):
+        for index in self.columns:
+            groups = self.groups[index]
+            if groups is None:
+                continue
+            current = row[index]
+            positions = groups.get(current)
+            if positions is None:
+                positions = array('Q')
+                groups[current] = positions
+                delta = 512 + sys.getsizeof(current) + sys.getsizeof(positions)
+            else:
+                delta = 0
+            before = sys.getsizeof(positions)
+            positions.append(self.position)
+            delta += sys.getsizeof(positions) - before
+            if (self.total + delta > self.budget or
+                    len(groups) > self.max_groups):
+                self.total -= self.sizes[index]
+                self.groups[index] = None
+                continue
+            self.sizes[index] += delta
+            self.total += delta
+        self.position += 1
+
+    def finish(self):
+        return [
+            (index, groups, self.sizes[index])
+            for index in self.columns
+            if (groups := self.groups[index])
+        ]
+
+
 class NativeKernel:
     def __init__(self):
         filename = '_native.dll' if os.name == 'nt' else '_native.so'
@@ -118,7 +175,7 @@ class NativeKernel:
 
 
 class Snapshot:
-    def __init__(self, storage, schema, column):
+    def __init__(self, storage, schema, column, filter_observer=None):
         self.dimensions = schema['columns'][column][2]
         self.paths = [storage.directory / f'flat-{schema["id"]}.{extension}' for extension in ('vec', 'keys')]
         self.vectors = self.keys = None
@@ -151,6 +208,8 @@ class Snapshot:
                     files[0].write(row[column].tobytes())
                     files[1].write(KEY.pack(row[schema['pk']]))
                 self.count += 1
+                if filter_observer is not None:
+                    filter_observer(row)
                 failpoint('during_vector_rebuild')
         except BaseException:
             if files is not None:
@@ -259,7 +318,18 @@ class VectorIndexes:
             return None
         table = schema['id']
         if table not in self.entries:
-            self.entries[table] = Snapshot(self.storage, schema, column)
+            remaining = max(0, self.filter_budget - self.filter_bytes)
+            collector = SnapshotFilterCollector(schema, remaining)
+            snapshot = Snapshot(self.storage, schema, column, collector.observe)
+            self.entries[table] = snapshot
+            for column_index, groups, _ in collector.finish():
+                for value, positions in groups.items():
+                    key = (table, ((column_index, '=', value),))
+                    size = sys.getsizeof(positions) + 512 + sys.getsizeof(value)
+                    if self.filter_bytes + size > self.filter_budget:
+                        break
+                    self.filters[key] = positions, size
+                    self.filter_bytes += size
         return self.entries[table]
 
     def invalidate(self, table=None):
@@ -329,6 +399,11 @@ class VectorIndexes:
                 self.filter_bytes -= size
 
     def selection(self, schema, snapshot, conditions, matches):
+        # Tests and embedding callers may lower the internal budget after a
+        # snapshot was built. Drop entries that no longer fit before serving a
+        # query so the documented memory bound remains true.
+        if self.filter_bytes > self.filter_budget:
+            self.invalidate_filters()
         key = (schema['id'], tuple(conditions))
         if key in self.filters:
             self.filters.move_to_end(key)
@@ -374,6 +449,11 @@ class VectorIndexes:
             self.column_values[cache_key] = values, size
             self.filter_bytes += size
 
+    def _drop_values(self, cache_key):
+        entry = self.column_values.pop(cache_key, None)
+        if entry is not None:
+            self.filter_bytes -= entry[1]
+
     def _make_room(self, size):
         while self.filter_bytes + size > self.filter_budget:
             if self.filters:
@@ -400,13 +480,11 @@ class VectorIndexes:
         entry = self.column_values.get(cache_key)
         if entry is not None:
             self.column_values.move_to_end(cache_key)
-            selected = array('Q')
-            for position, current in enumerate(entry[0]):
-                if current == value:
-                    selected.append(position)
-                    if sys.getsizeof(selected) + overhead > self.filter_budget:
-                        return False  # Large filters use the bounded streaming path.
-            return self._store_selection(key, selected, overhead)
+            values = entry[0]
+            value_bytes = entry[1]
+        else:
+            values = []
+            value_bytes = sys.getsizeof(values)
         selected = array('Q')
         # One scan can populate the position cache for every value of this
         # column, and retain the column values so later scans of a suppressed
@@ -414,16 +492,20 @@ class VectorIndexes:
         # same budget, so a memory-constrained run never allocates more.
         grouped = {} if cache_key not in self.grouping_suppressed else None
         group_bytes = 0
-        values = []
-        value_bytes = sys.getsizeof(values)
-        for position in range(snapshot.count):
-            row = self.storage.get(schema['id'], snapshot.key(position))
-            current = DELETED if row is None else row[column]
+        if entry is None:
+            source = (
+                (DELETED if (row := self.storage.get(
+                    schema['id'], snapshot.key(position))) is None else row[column])
+                for position in range(snapshot.count)
+            )
+        else:
+            source = values
+        for position, current in enumerate(source):
             if current == value:
                 selected.append(position)
                 if sys.getsizeof(selected) + overhead > self.filter_budget:
                     return False  # Large filters use the bounded streaming path.
-            if values is not None:
+            if entry is None and values is not None:
                 values.append(current)
                 value_bytes += 8 + sys.getsizeof(current)
                 if value_bytes > self.filter_budget:
@@ -457,9 +539,12 @@ class VectorIndexes:
                     self.filter_bytes += size
                 else:
                     stored_all = False
+            if stored_all:
+                self._drop_values(cache_key)
         # The per-value cache covers every value when it was stored completely;
         # otherwise keep the column scan for later equality queries.
-        if values is not None and (grouped is None or not stored_all):
+        if (entry is None and values is not None and
+                (grouped is None or not stored_all)):
             self._cache_values(cache_key, values, value_bytes)
         return self._store_selection(key, selected, overhead)
 

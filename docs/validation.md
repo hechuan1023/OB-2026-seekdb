@@ -1,5 +1,7 @@
 # MiniVectorDB 优化与验证记录
 
+2026-11-13 的快照等值分组预收集实验、1,000 次查询对照、64 MiB 超内存验证和已拒绝的原始值缓存方案见 [precollect-filter-groups-20261113.md](precollect-filter-groups-20261113.md)。
+
 最新公开 v4 题包的 20 组验证、106 项回归和镜像恢复结果见 [public-v4-validation.md](public-v4-validation.md)。此前用户报告正式提测未通过，具体原因未获日志确认；本地验证不代表正式准入。
 
 本文件保留上一版实验；当前源码已进一步优化索引失效。最新 72 项测试、独立容器三轮测量与超内存向量验证见 [r3-optimization.md](r3-optimization.md)。下文历史报告关联提交 `491f7611579dfc1f52e054dc376c22f89e72394e`，不再作为当前源码性能结果。

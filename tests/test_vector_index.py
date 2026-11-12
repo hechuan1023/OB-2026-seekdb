@@ -78,6 +78,40 @@ class NativeIndexTests(unittest.TestCase):
         self.db.execute("UPDATE t SET tag='gone' WHERE tag='g1'")
         self.assertEqual(self.compare_reference(sql), [])
 
+    def test_snapshot_precollects_filter_values_and_preserves_invalidation(self):
+        table = self.db.table('t')['id']
+        cache_key = (table, ((1, '=', 'g0'),))
+        self.assertIn(cache_key, self.db.vector_indexes.filters)
+        snapshot = self.db.vector_indexes.entries[table]
+
+        self.db.execute("UPDATE t SET v='[9,9,9,9]' WHERE id=0")
+        self.assertIs(self.db.vector_indexes.entries[table], snapshot)
+        self.assertIn(cache_key, self.db.vector_indexes.filters)
+
+        self.db.execute("UPDATE t SET tag='g9' WHERE id=0")
+        self.assertIs(self.db.vector_indexes.entries[table], snapshot)
+        self.assertNotIn(cache_key, self.db.vector_indexes.filters)
+
+        self.db.vector_indexes.invalidate(table)
+        self.db.vector_indexes.ensure(self.db.table('t'))
+        self.assertIn(cache_key, self.db.vector_indexes.filters)
+        self.db.execute("DELETE FROM t WHERE id=0")
+        self.assertNotIn(cache_key, self.db.vector_indexes.filters)
+
+    def test_precollection_shares_the_filter_budget_across_tables(self):
+        self.db.vector_indexes.filter_budget = 2048
+        self.db.vector_indexes.invalidate_filters()
+        for name in ('left', 'right'):
+            self.db.execute(
+                f'CREATE TABLE {name}(id BIGINT PRIMARY KEY,tag VARCHAR(8),v VECTOR(2))')
+            self.db.execute(
+                'INSERT INTO %s VALUES ' % name
+                + ','.join(f"({i},'g{i % 2}','[1,0]')" for i in range(30)))
+            self.db.execute(f'CREATE VECTOR INDEX {name}_vi ON {name}(v)')
+        self.assertLessEqual(
+            self.db.vector_indexes.filter_bytes,
+            self.db.vector_indexes.filter_budget)
+
     def test_grouped_equality_cache_tracks_transactions(self):
         query = lambda tag: "SELECT id FROM t WHERE tag='%s' ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 10" % tag
         before = self.compare_reference(query('g2'))
