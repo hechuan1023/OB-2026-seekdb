@@ -225,9 +225,11 @@ MV_EXPORT int mv_abi_version() { return 1; }
 
 // Retain K+1 candidates. Python verifies a conservative boundary gap, re-evaluates
 // selected distances with math.dist, and falls back on ambiguous boundaries.
-template <typename Distance>
-static std::int64_t topk_impl(
-    Distance distance, const float *__restrict vectors,
+// The distance function is a template value so it can be inlined; a function
+// pointer would force one indirect call per row.
+template <auto Distance, std::uint64_t FixedDimensions>
+__attribute__((always_inline)) static inline std::int64_t topk_body(
+    const float *__restrict vectors,
     const std::int64_t *__restrict keys, std::uint64_t rows,
     std::uint64_t dimensions, const float *__restrict query,
     const std::uint64_t *__restrict selection, std::uint64_t selected,
@@ -236,6 +238,9 @@ static std::int64_t topk_impl(
   if (!vectors || !keys || !query || !positions || !distances || !dimensions ||
       dimensions > 65536 || keep == 0 || rows > SIZE_MAX / dimensions)
     return -1;
+  // A nonzero FixedDimensions makes the width a compile-time constant, which
+  // lets the compiler unroll the distance loop for the benchmark dimension.
+  const std::uint64_t width = FixedDimensions ? FixedDimensions : dimensions;
   const std::uint64_t count = selection ? selected : rows;
   keep = std::min(keep, count);
   try {
@@ -247,7 +252,7 @@ static std::int64_t topk_impl(
       // Squared distance: monotone in the true distance, so ordering and ties
       // are unchanged. Python re-evaluates the selected rows with math.dist and
       // its boundary guard only needs a monotone key.
-      const Candidate item{distance(vectors + row * dimensions, query, dimensions),
+      const Candidate item{Distance(vectors + row * width, query, width),
                            keys[row], row};
       if (heap.size() < keep) {
         heap.push_back(item);
@@ -269,14 +274,41 @@ static std::int64_t topk_impl(
   }
 }
 
+// Generic path: a separate function so its code stays out of the specialized
+// wrapper and does not push the hot loop out of the instruction cache.
+template <auto Distance>
+__attribute__((noinline)) static std::int64_t topk_impl(
+    const float *__restrict vectors,
+    const std::int64_t *__restrict keys, std::uint64_t rows,
+    std::uint64_t dimensions, const float *__restrict query,
+    const std::uint64_t *__restrict selection, std::uint64_t selected,
+    std::uint64_t keep, std::uint64_t *__restrict positions,
+    double *__restrict distances) noexcept {
+  return topk_body<Distance, 0>(vectors, keys, rows, dimensions, query,
+                                selection, selected, keep, positions, distances);
+}
+
+// Unfiltered 128-dimension path: the constant width unrolls the distance loop.
+template <auto Distance>
+__attribute__((always_inline)) static inline std::int64_t topk_impl_128(
+    const float *__restrict vectors,
+    const std::int64_t *__restrict keys, std::uint64_t rows,
+    std::uint64_t dimensions, const float *__restrict query,
+    const std::uint64_t *__restrict selection, std::uint64_t selected,
+    std::uint64_t keep, std::uint64_t *__restrict positions,
+    double *__restrict distances) noexcept {
+  return topk_body<Distance, 128>(vectors, keys, rows, dimensions, query,
+                                  selection, selected, keep, positions, distances);
+}
+
 MV_EXPORT MV_TARGET_CLONES std::int64_t mv_topk(
     const float *__restrict vectors, const std::int64_t *__restrict keys,
     std::uint64_t rows, std::uint64_t dimensions,
     const float *__restrict query, const std::uint64_t *__restrict selection,
     std::uint64_t selected, std::uint64_t keep,
     std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
-  return topk_impl(distance_squared, vectors, keys, rows, dimensions, query,
-                   selection, selected, keep, positions, distances);
+  return topk_impl<distance_squared>(vectors, keys, rows, dimensions, query,
+                                     selection, selected, keep, positions, distances);
 }
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -286,8 +318,11 @@ MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t mv_topk_fma(
     const float *__restrict query, const std::uint64_t *__restrict selection,
     std::uint64_t selected, std::uint64_t keep,
     std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
-  return topk_impl(distance_fma, vectors, keys, rows, dimensions, query,
-                   selection, selected, keep, positions, distances);
+  if (dimensions == 128 && selection == nullptr)
+    return topk_impl_128<distance_fma>(vectors, keys, rows, dimensions, query,
+                                       selection, selected, keep, positions, distances);
+  return topk_impl<distance_fma>(vectors, keys, rows, dimensions, query,
+                                 selection, selected, keep, positions, distances);
 }
 
 // Candidate-selection kernel: float32 distances, same heap and tie-break.
@@ -299,8 +334,11 @@ MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t mv_topk_f32(
     const float *__restrict query, const std::uint64_t *__restrict selection,
     std::uint64_t selected, std::uint64_t keep,
     std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
-  return topk_impl(distance_f32, vectors, keys, rows, dimensions, query,
-                   selection, selected, keep, positions, distances);
+  if (dimensions == 128 && selection == nullptr)
+    return topk_impl_128<distance_f32>(vectors, keys, rows, dimensions, query,
+                                       selection, selected, keep, positions, distances);
+  return topk_impl<distance_f32>(vectors, keys, rows, dimensions, query,
+                                 selection, selected, keep, positions, distances);
 }
 
 MV_EXPORT int mv_has_fma() {
