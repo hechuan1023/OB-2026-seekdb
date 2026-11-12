@@ -169,7 +169,7 @@ class NativeKernel:
         use_openmp = (
             self.search_f32_exact_omp is not None and self.search_threads > 1
             and ((selected is None and snapshot.count >= 4096)
-                 or (selected is not None and len(selected) >= 1024))
+                 or (selected is not None and len(selected) >= 768))
         )
         if use_openmp:
             returned = self.search_f32_exact_omp(

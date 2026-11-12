@@ -461,7 +461,7 @@ mv_topk_f32_exact_omp(
     double *__restrict exact_distances) noexcept {
   if (!threads || threads < 2 ||
       (selection == nullptr && rows < 4096) ||
-      (selection != nullptr && selected < 1024))
+      (selection != nullptr && selected < 768))
     return mv_topk_f32_exact(vectors, keys, rows, dimensions, query, selection,
                              selected, keep, positions, distances,
                              exact_distances);

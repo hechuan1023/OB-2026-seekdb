@@ -373,7 +373,7 @@ class Float32SelectionTests(unittest.TestCase):
             kernel.search_threads = 2
             threaded = kernel.topk_f32_exact(snapshot, query, None, 11)
             filtered = kernel.topk_f32_exact(snapshot, query, selected, 11)
-            small = array('Q', range(0, 100))
+            small = array('Q', range(0, 512))
             small_filtered = kernel.topk_f32_exact(snapshot, query, small, 11)
             kernel.search_threads = 1
             sequential = kernel.topk_f32_exact(snapshot, query, None, 11)
