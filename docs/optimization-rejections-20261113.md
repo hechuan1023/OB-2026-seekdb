@@ -86,6 +86,26 @@ from 48,988,160 to 48,893,952 bytes, only 0.19% lower. The zero-filled
 preallocation and offset writes outweighed the saved reallocations, so the
 source and its row-count bookkeeping were reverted.
 
+## IVF coarse quantizer
+
+A self-written IVF prototype clustered 10,000 uniform 128-dimensional vectors
+into 64, 128, and 256 groups and searched 2 through 32 probes. Recall was too
+low at useful probe counts: 128 clusters with 32 probes reached only 0.6266
+mean Recall@10, while 64 clusters with 32 probes reached 0.7958. Raising the
+probe count enough to approach the 0.95 threshold also approached the exact
+scan cost. The prototype and its temporary source were removed.
+
+## 4-bit scalar quantization
+
+A 4-bit candidate index was evaluated on the same 10,000-row, 128-dimensional,
+2,000-row filtered shape with five seeds and 400 queries per seed. Global and
+per-dimension scales both lost too much ranking information. With 16
+candidates, mean Recall@10 was 0.9845 on uniform data, 0.8701 on Gaussian data,
+and 0.4072 on clustered data. Raising the clustered result to 0.5786 required
+32 candidates and still missed the requirement. The 8-bit SQ8 index was
+retained because it reached at least 0.9984 average recall on every tested
+distribution with 16 candidates.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
