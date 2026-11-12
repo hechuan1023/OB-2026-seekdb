@@ -15,8 +15,8 @@
     "minivectordb/protocol.py": "58431431e9228869bea4e3a24179a063fe35e975efd56514b130ab181d131d5a",
     "minivectordb/sorting.py": "ba9fac1e55d1e346d1e5cd57848b8e8b967386fd12ea94159525ace58d78967d",
     "minivectordb/sql.py": "c1731e2d6da4ef443aa2d35165d57940a2762e987d061484cc848f22fff9969f",
-    "minivectordb/storage.py": "fefbfd7e9461d943378bd7d6585a26de5330d0ba39a9ae43d6da981ef13f0f3b",
-    "minivectordb/vector_index.py": "d8e566bbca705fd24a3cfd42d87e79be4d18e7c9567bfef64a0558e35062bdf4",
+    "minivectordb/storage.py": "dfa6a7ba0c19b1a768cd246626671c1948dda15ae1c443094bc1f9973d1c7acc",
+    "minivectordb/vector_index.py": "3148a55ec3ac86d6856e2027a8518ad5d5368f8b13e9811147fbb153874e2ecd",
     "native/exact.cpp": "5b7efda58faf04b632a81b7cffbce1d327c1b3b0716783c34d6907719fed60a1",
     "pyproject.toml": "b13ae7a42e05d3505490d713cdd9ce20cbb215ec3dafe6bfa38e9605f0a5387d",
     "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -60,7 +60,9 @@
     "tests_cross/p8_malformed.py": "94efade0f2bf5f980eb3cee33080dcd4272c9d0d44468bb534cecaa86fb8f99d",
     "tests_cross/p9_protocol_streams.py": "d191ad02597898694826a6bad6a4a75e99d30e7851776989c96dec6e8811cdf5",
     "tests_cross/profile_query.py": "ab7bc96131bded27e3f052e08b1b3bb3a5e6e8a14ef740cc62b0d363471cdcf3",
-    "tests_cross/profile_write.py": "dadce467ccf2cec8fe9bd82f30d86f0c77d18039bfaa0bcc466e91280461f541"
+    "tests_cross/profile_write.py": "dadce467ccf2cec8fe9bd82f30d86f0c77d18039bfaa0bcc466e91280461f541",
+    "tests/test_vector_pk_filter.py": "a164576d7837860e7aed904a9c7919d2857c734d641801ffcb9a2c6207e5e70d",
+    "tests/test_snapshot_wal_order.py": "4f2ea416ca11f32377d21f5a3f1962c54c07a1f7da031b880c6358a1255058b7"
   },
   "verified_reports": [],
   "initial_base_commit": "c842a368c3394748d0499386c18f6b465242e141",

@@ -636,6 +636,41 @@ class Storage:
                 if offset > 0 and self.index.get(table, key) is None:
                     yield self.read_row(self.stage, offset - 1)
 
+    def snapshot_rows(self, table):
+        """Read a single-table committed snapshot in WAL order when bounded.
+
+        Rebuilt indexes only need current row versions.  Sequential log reads
+        avoid repeatedly faulting random full vectors when the table exceeds
+        memory.  Active transactions and multi-table databases use the normal
+        visibility-aware reader; a log with too many obsolete bytes also falls
+        back to avoid scanning a disproportionately large history.
+        """
+        size = os.fstat(self.wal.fileno()).st_size
+        if (self.active or len(self.schemas) != 1 or
+                size > self.live_bytes * 2 + (1 << 20)):
+            yield from self.rows(table)
+            return
+        position = len(MAGIC)
+        while position < size:
+            self.wal.seek(position)
+            raw = self.wal.read(HEADER.size)
+            if len(raw) != HEADER.size:
+                raise RuntimeError('Truncated WAL transaction header')
+            magic, length, _ = HEADER.unpack(raw)
+            start = position + HEADER.size
+            end = start + length
+            if magic != b'TXN1' or end + TRAILER.size > size:
+                raise RuntimeError('Invalid WAL transaction boundary')
+            self.wal.seek(end)
+            footer = self.wal.read(TRAILER.size)
+            if len(footer) != TRAILER.size or TRAILER.unpack(footer) != (b'DONE', length):
+                raise RuntimeError('Invalid WAL transaction footer')
+            for offset, record, _ in records_buffered(self.wal, start, end):
+                if (record[0] == 'row' and record[1] == table and
+                        record[3] is not None and self.index.get(table, record[2]) == offset + 1):
+                    yield record[3]
+            position = end + TRAILER.size
+
     def close(self):
         if self.active:
             self.rollback()
