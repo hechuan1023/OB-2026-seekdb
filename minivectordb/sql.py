@@ -27,26 +27,31 @@ class Parser:
     def __init__(self, sql):
         tokens = []
         append = tokens.append
-        match = TOKEN.match
         groups = TOKEN_GROUPS
+        # finditer scans the input in one C-level loop; group() is only called
+        # for tokens that survive the space/comment filter. A gap between
+        # matches is exactly the position where TOKEN.match would have failed.
         pos = 0
-        length = len(sql)
-        while pos < length:
-            token = match(sql, pos)
-            if token is None:
+        for token in TOKEN.finditer(sql):
+            if token.start() != pos:
                 raise DBError('SYNTAX_ERROR', f'Unexpected input at character {pos}')
-            kind = groups[token.lastindex]
-            value = token.group()
             pos = token.end()
+            kind = groups[token.lastindex]
             if kind != 'space' and kind != 'comment':
-                append((kind, value))
+                append((kind, token.group()))
+        if pos != len(sql):
+            raise DBError('SYNTAX_ERROR', f'Unexpected input at character {pos}')
         self.tokens = tokens
         self.pos = 0
 
     def peek(self, value=None):
         if self.pos == len(self.tokens):
             return value is None
-        return value is not None and self.tokens[self.pos][1].upper() == value
+        if value is None:
+            return False
+        kind, text = self.tokens[self.pos]
+        # Only names need case folding; symbols and numbers compare directly.
+        return text == value if kind != 'name' else text.upper() == value
 
     def take(self, value):
         if self.peek(value):
