@@ -1,5 +1,7 @@
 # MiniVectorDB 优化与验证记录
 
+2026-11-13 的规范多行 INSERT 解析快路径、通用解析器 A/B、7 轮端到端写入对照和完整资源回归见 [insert-fast-path-20261113.md](insert-fast-path-20261113.md)。
+
 2026-11-13 的小 K 有序候选收集器、同进程内核／完整 TopK A/B、同一数据卷 7 轮端到端对照及完整资源回归见 [sorted-small-k-20261113.md](sorted-small-k-20261113.md)。
 
 2026-11-13 的快照等值分组预收集实验、1,000 次查询对照、64 MiB 超内存验证和已拒绝的原始值缓存方案见 [precollect-filter-groups-20261113.md](precollect-filter-groups-20261113.md)。

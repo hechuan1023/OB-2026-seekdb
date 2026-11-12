@@ -34,6 +34,19 @@ FAST_DISTANCE_SELECT = re.compile(
     re.IGNORECASE,
 )
 
+# The benchmark's bulk loader uses the same three-column row shape repeatedly.
+# Restrict the shortcut to unquoted identifiers and strings without an escaped
+# quote; every other shape falls back to Parser so the accepted language and
+# error positions stay unchanged.
+FAST_INSERT_PREFIX = re.compile(
+    r"\s*INSERT\s+INTO\s+([A-Za-z_][A-Za-z_0-9]*)\s+VALUES\s+",
+    re.IGNORECASE,
+)
+FAST_INSERT_ROW = re.compile(
+    r"\s*\(\s*([+-]?\d+)\s*,\s*'([^']*)'\s*,\s*'([^']*)'\s*\)\s*",
+    re.DOTALL,
+)
+
 
 class Parser:
     def __init__(self, sql):
@@ -241,7 +254,41 @@ class Parser:
         return result
 
 
+def _parse_fast_insert(sql):
+    match = FAST_INSERT_PREFIX.match(sql)
+    if match is None:
+        return None
+    table = match.group(1)
+    body = sql[match.end():].rstrip()
+    if body.endswith(';'):
+        body = body[:-1].rstrip()
+    rows = []
+    pos = 0
+    while pos < len(body):
+        row = FAST_INSERT_ROW.match(body, pos)
+        if row is None:
+            return None
+        key, text, vector = row.groups()
+        rows.append([
+            Literal('number', key),
+            Literal('string', text),
+            Literal('string', vector),
+        ])
+        pos = row.end()
+        if pos == len(body):
+            break
+        if body[pos] != ',':
+            return None
+        pos += 1
+    if not rows:
+        return None
+    return ('insert', table.lower(), None, rows)
+
+
 def parse(sql):
+    fast_insert = _parse_fast_insert(sql)
+    if fast_insert is not None:
+        return fast_insert
     match = FAST_DISTANCE_SELECT.fullmatch(sql)
     if match is not None:
         (key, vector_column, vector, alias, table, filter_column,

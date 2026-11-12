@@ -45,6 +45,22 @@ class TokenizerMappingTests(unittest.TestCase):
                "ORDER BY d LIMIT 10")
         self.assertEqual(parse(sql), Parser(sql).parse())
 
+    def test_insert_fast_path_matches_parser(self):
+        sql = ("INSERT INTO t VALUES "
+               "(1,'database','[1,0,0,0]'), "
+               "(-2,'travel','[0,1,0,0]');")
+        self.assertEqual(parse(sql), Parser(sql).parse())
+
+    def test_insert_fast_path_falls_back_for_other_shapes(self):
+        cases = [
+            "INSERT INTO t(id,tag,v) VALUES (1,'a','[1]')",
+            "INSERT INTO t VALUES (1,'a','[1]','extra')",
+            "INSERT INTO t VALUES (1,'it''s','[1]')",
+            "INSERT INTO `t` VALUES (1,'a','[1]')",
+        ]
+        for sql in cases:
+            self.assertEqual(parse(sql), Parser(sql).parse())
+
 
 if __name__ == '__main__':
     unittest.main()
