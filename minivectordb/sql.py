@@ -22,6 +22,18 @@ TOKEN = re.compile(
 # the mapping is pinned by TOKEN_GROUPS == list(TOKEN.groupindex).
 TOKEN_GROUPS = [None] + list(TOKEN.groupindex)
 
+# The performance workload repeatedly uses this exact TopK projection shape.
+# Recognize only the unquoted, escape-free spelling and send every other query
+# through Parser, so the fast path cannot broaden the accepted SQL language.
+FAST_DISTANCE_SELECT = re.compile(
+    r"\s*SELECT\s+([A-Za-z_][A-Za-z_0-9]*)\s*,\s*"
+    r"L2_DISTANCE\s*\(\s*([A-Za-z_][A-Za-z_0-9]*)\s*,\s*'([^']*)'\s*\)\s+"
+    r"AS\s+([A-Za-z_][A-Za-z_0-9]*)\s+FROM\s+([A-Za-z_][A-Za-z_0-9]*)"
+    r"(?:\s+WHERE\s+([A-Za-z_][A-Za-z_0-9]*)\s*=\s*'([^']*)')?\s+"
+    r"ORDER\s+BY\s+([A-Za-z_][A-Za-z_0-9]*)\s+LIMIT\s+(\d+)\s*;?\s*",
+    re.IGNORECASE,
+)
+
 
 class Parser:
     def __init__(self, sql):
@@ -230,4 +242,20 @@ class Parser:
 
 
 def parse(sql):
+    match = FAST_DISTANCE_SELECT.fullmatch(sql)
+    if match is not None:
+        (key, vector_column, vector, alias, table, filter_column,
+         filter_value, order_column, limit) = match.groups()
+        try:
+            limit = int(limit)
+        except ValueError:
+            pass
+        else:
+            where = ([] if filter_column is None else
+                     [(filter_column.lower(), '=', Literal('string', filter_value))])
+            return ('select', table.lower(),
+                    [(('column', key.lower()), None),
+                     (('distance', vector_column.lower(), Literal('string', vector)),
+                      alias.lower())],
+                    where, [(('column', order_column.lower()), False)], limit)
     return Parser(sql).parse()

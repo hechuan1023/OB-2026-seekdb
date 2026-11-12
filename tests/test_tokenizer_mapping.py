@@ -1,7 +1,7 @@
 """Pin the tokenizer group mapping and verify tokenization equivalence."""
 import unittest
 
-from minivectordb.sql import TOKEN, TOKEN_GROUPS, Parser
+from minivectordb.sql import TOKEN, TOKEN_GROUPS, Parser, parse
 
 
 class TokenizerMappingTests(unittest.TestCase):
@@ -31,6 +31,19 @@ class TokenizerMappingTests(unittest.TestCase):
         from minivectordb.errors import DBError
         with self.assertRaises(DBError):
             Parser('SELECT ^')
+
+    def test_distance_select_fast_path_matches_parser(self):
+        sql = ("SELECT id,L2_DISTANCE(v,'[0.1,0.2]') AS d FROM t "
+               "WHERE tag='g0' ORDER BY d LIMIT 10")
+        self.assertEqual(parse(sql), Parser(sql).parse())
+
+        unfiltered = "SELECT id,L2_DISTANCE(v,'[0.1,0.2]') AS d FROM t ORDER BY d LIMIT 3;"
+        self.assertEqual(parse(unfiltered), Parser(unfiltered).parse())
+
+    def test_distance_select_fast_path_falls_back_for_other_shapes(self):
+        sql = ("SELECT id,tag,L2_DISTANCE(v,'[0.1,0.2]') AS d FROM t "
+               "ORDER BY d LIMIT 10")
+        self.assertEqual(parse(sql), Parser(sql).parse())
 
 
 if __name__ == '__main__':
