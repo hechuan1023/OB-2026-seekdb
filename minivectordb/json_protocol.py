@@ -101,18 +101,21 @@ def serve(engine, input_stream, output):
             if isinstance(value, QueryResult):
                 # Stream rows in bounded chunks instead of retaining the whole
                 # result; with unbuffered stdout this also avoids one syscall
-                # per row on large results.
-                output.write('{"id":' + _json(ident) + ',"ok":true,"columns":' +
-                             _json(value.columns) + ',"rows":[')
+                # per row on large results. Keep the prefix in the first chunk
+                # so the common ten-row TopK response is one write.
+                chunk = ['{"id":' + _json(ident) + ',"ok":true,"columns":' +
+                         _json(value.columns) + ',"rows":[']
+                rows_in_chunk = 0
                 first = True
-                chunk = []
                 try:
                     for row in value.rows:
                         chunk.append(('' if first else ',') + _json_row(row))
                         first = False
-                        if len(chunk) >= 64:
+                        rows_in_chunk += 1
+                        if rows_in_chunk >= 64:
                             output.write(''.join(chunk))
                             chunk.clear()
+                            rows_in_chunk = 0
                 finally:
                     value.rows.close()
                 chunk.append(']}\n')

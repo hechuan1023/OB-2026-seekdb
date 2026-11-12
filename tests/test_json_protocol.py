@@ -42,6 +42,14 @@ class JsonProtocolTests(unittest.TestCase):
                 self.assertFalse(request(6, "INSERT INTO t VALUES (9007199254740993,'[0,0]')")['ok'])
                 self.assertTrue(request(7, 'ROLLBACK')['ok'])
                 self.assertEqual(request(8, 'SELECT v FROM t')['rows'], [[[1.0, 0.0]]])
+                rows = ','.join("(%d,'[0,0]')" % ident for ident in range(1, 66))
+                self.assertEqual(
+                    request(9, 'INSERT INTO t VALUES ' + rows)['affected_rows'], 65)
+                result = request(
+                    10, 'SELECT id FROM t ORDER BY id LIMIT 70')
+                self.assertEqual(
+                    [row[0] for row in result['rows']],
+                    list(range(1, 66)) + [9007199254740993])
                 p.stdin.write(json.dumps({'id': 'end', 'op': 'shutdown'}) + '\n')
                 p.stdin.flush()
                 self.assertEqual(json.loads(p.stdout.readline()), {'id': 'end', 'ok': True})
