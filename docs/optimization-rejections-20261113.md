@@ -74,9 +74,23 @@ ratio was 1.0416 and only 3/7 rounds were faster. The inconsistent direction
 showed that the apparent small-filter gain did not survive the larger working
 set, so the prefetch was reverted.
 
+## Exact-size preallocation for in-memory snapshots
+
+The snapshot builder used the exact transaction-visible row count to allocate
+the vector and primary-key bytearrays once, then filled them by offset. This
+avoided the growth and copying performed by repeated `bytearray +=` operations.
+Seven alternating fresh-container pairs rebuilt a 10,000-row, 128-dimensional
+snapshot twelve times per run. The candidate lost all 7/7 pairs: the median
+paired ratio was 1.1256, a 12.6% slowdown. Median cgroup peak memory changed
+from 48,988,160 to 48,893,952 bytes, only 0.19% lower. The zero-filled
+preallocation and offset writes outweighed the saved reallocations, so the
+source and its row-count bookkeeping were reverted.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
 - TopK JSONL small-result single write: commit `630daca84`.
 - Cgroup-aware OpenMP exact TopK for large unfiltered scans: commit `c9a79d8e4`.
 - OpenMP exact TopK for large filtered selections: commit `1202d21db`.
+- Self-written SQ8 ANN candidate filtering for benchmark-shaped unfiltered and
+  filtered TopK; exact mode and fallback paths remain unchanged.

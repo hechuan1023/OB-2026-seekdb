@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <queue>
 #include <vector>
 
 // std::from_chars for double needs GCC 11+; older host toolchains (MinGW 8)
@@ -538,6 +539,165 @@ mv_topk_f32_exact_omp(
 
 MV_EXPORT int mv_has_fma() {
   return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma");
+}
+
+// Global int8 scalar quantization is used only as an ANN candidate filter.
+// The caller re-ranks candidates with the existing exact float32 kernel and
+// verifies returned distances in ordered double precision. Exact mode never
+// enters this structure. A global scale is selected because the benchmark
+// dimensions share the same distribution; callers disable this path when the
+// observed per-dimension spans are too uneven.
+struct Sq8Index {
+  std::uint64_t rows;
+  std::uint64_t dimensions;
+  float minimum;
+  float scale;
+  std::vector<std::uint8_t> codes;
+};
+
+__attribute__((target("avx2,fma"))) static inline std::int32_t
+sq8_distance(const std::uint8_t *__restrict row,
+             const std::uint8_t *__restrict query,
+             std::uint64_t dimensions) {
+  __m256i total = _mm256_setzero_si256();
+  std::uint64_t dimension = 0;
+  for (; dimension + 16 <= dimensions; dimension += 16) {
+    const __m128i row8 = _mm_loadu_si128(
+        reinterpret_cast<const __m128i *>(row + dimension));
+    const __m128i query8 = _mm_loadu_si128(
+        reinterpret_cast<const __m128i *>(query + dimension));
+    const __m256i row16 = _mm256_cvtepu8_epi16(row8);
+    const __m256i query16 = _mm256_cvtepu8_epi16(query8);
+    const __m256i delta = _mm256_sub_epi16(row16, query16);
+    total = _mm256_add_epi32(total, _mm256_madd_epi16(delta, delta));
+  }
+  __m128i sum = _mm_add_epi32(_mm256_castsi256_si128(total),
+                              _mm256_extracti128_si256(total, 1));
+  sum = _mm_hadd_epi32(sum, sum);
+  sum = _mm_hadd_epi32(sum, sum);
+  std::int32_t result = _mm_cvtsi128_si32(sum);
+  for (; dimension < dimensions; ++dimension) {
+    const std::int32_t delta =
+        static_cast<std::int32_t>(row[dimension]) - query[dimension];
+    result += delta * delta;
+  }
+  return result;
+}
+
+MV_EXPORT void *mv_sq8_build(const float *vectors, std::uint64_t rows,
+                             std::uint64_t dimensions) noexcept {
+  if (!vectors || !rows || !dimensions || rows > SIZE_MAX / dimensions)
+    return nullptr;
+  try {
+    float minimum = vectors[0];
+    float maximum = vectors[0];
+    std::vector<float> dimension_minimums(
+        vectors, vectors + dimensions);
+    std::vector<float> dimension_maximums(
+        vectors, vectors + dimensions);
+    for (std::uint64_t row = 1; row < rows; ++row) {
+      const float *vector = vectors + row * dimensions;
+      for (std::uint64_t dimension = 0; dimension < dimensions; ++dimension) {
+        minimum = std::min(minimum, vector[dimension]);
+        maximum = std::max(maximum, vector[dimension]);
+        dimension_minimums[dimension] =
+            std::min(dimension_minimums[dimension], vector[dimension]);
+        dimension_maximums[dimension] =
+            std::max(dimension_maximums[dimension], vector[dimension]);
+      }
+    }
+    float minimum_span = std::numeric_limits<float>::infinity();
+    float maximum_span = 0.0f;
+    for (std::uint64_t dimension = 0; dimension < dimensions; ++dimension) {
+      const float span =
+          dimension_maximums[dimension] - dimension_minimums[dimension];
+      minimum_span = std::min(minimum_span, span);
+      maximum_span = std::max(maximum_span, span);
+    }
+    if (!(maximum_span > 0.0f) || maximum_span > minimum_span * 4.0f)
+      return nullptr;
+    const float scale =
+        maximum > minimum ? (maximum - minimum) / 255.0f : 1.0f;
+    auto *index = new Sq8Index{rows, dimensions, minimum, scale, {}};
+    index->codes.resize(rows * dimensions);
+    for (std::uint64_t i = 0; i < rows * dimensions; ++i) {
+      const float quantized = (vectors[i] - minimum) / scale;
+      index->codes[i] = static_cast<std::uint8_t>(
+          std::max(0.0f, std::min(255.0f, std::nearbyint(quantized))));
+    }
+    return index;
+  } catch (...) {
+    return nullptr;
+  }
+}
+
+MV_EXPORT std::int64_t mv_sq8_search(
+    const float *vectors, const std::int64_t *keys, std::uint64_t rows,
+    std::uint64_t dimensions, void *opaque, const float *query,
+    const std::uint64_t *selection, std::uint64_t selected,
+    std::uint64_t candidates, std::uint64_t keep,
+    std::uint64_t *positions, double *distances,
+    double *exact_distances) noexcept {
+  auto *index = static_cast<Sq8Index *>(opaque);
+  if (!index || !vectors || !keys || !query || !positions || !distances ||
+      !exact_distances || index->rows != rows ||
+      index->dimensions != dimensions || !keep || (selection && !selected))
+    return -1;
+  try {
+    const std::uint64_t count = selection ? selected : rows;
+    candidates = std::max(keep, std::min(candidates, count));
+    std::vector<std::uint8_t> query_codes(dimensions);
+    for (std::uint64_t dimension = 0; dimension < dimensions; ++dimension) {
+      const float quantized =
+          (query[dimension] - index->minimum) / index->scale;
+      query_codes[dimension] = static_cast<std::uint8_t>(
+          std::max(0.0f, std::min(255.0f, std::nearbyint(quantized))));
+    }
+    std::priority_queue<std::pair<std::int32_t, std::uint64_t>> nearest;
+    for (std::uint64_t n = 0; n < count; ++n) {
+      const std::uint64_t row = selection ? selection[n] : n;
+      if (row >= rows) return -1;
+      const std::int32_t distance = sq8_distance(
+          index->codes.data() + row * dimensions, query_codes.data(),
+          dimensions);
+      if (nearest.size() < candidates) {
+        nearest.emplace(distance, row);
+      } else if (distance < nearest.top().first) {
+        nearest.pop();
+        nearest.emplace(distance, row);
+      }
+    }
+    std::vector<std::uint64_t> selected;
+    selected.reserve(nearest.size());
+    while (!nearest.empty()) {
+      selected.push_back(nearest.top().second);
+      nearest.pop();
+    }
+    std::vector<Candidate> ranked;
+    if (dimensions == 128) {
+      ranked = topk_scan_selection_range<distance_f32, 128>(
+          vectors, keys, selected.data(), 0, selected.size(), dimensions,
+          query, keep);
+    } else {
+      ranked = topk_scan_selection_range<distance_f32, 0>(
+          vectors, keys, selected.data(), 0, selected.size(), dimensions,
+          query, keep);
+    }
+    for (std::size_t i = 0; i < ranked.size(); ++i) {
+      positions[i] = ranked[i].position;
+      distances[i] = ranked[i].distance;
+      exact_distances[i] =
+          exact_distance(vectors + ranked[i].position * dimensions, query,
+                         dimensions);
+    }
+    return static_cast<std::int64_t>(ranked.size());
+  } catch (...) {
+    return -1;
+  }
+}
+
+MV_EXPORT void mv_sq8_free(void *opaque) noexcept {
+  delete static_cast<Sq8Index *>(opaque);
 }
 #else
 MV_EXPORT int mv_has_fma() { return 0; }

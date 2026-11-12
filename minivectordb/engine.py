@@ -480,7 +480,7 @@ class Engine:
                 pk_only = all(expr == pk_expression or expr == distance_expression
                               for expr in expressions)
                 nearest = self.vector_indexes.topk(schema, distance_expression, conditions, limit,
-                                                   self.matches, pk_only)
+                                                   self.matches, pk_only, self.mode)
                 if nearest is not None:
                     if pk_only:
                         for key, distance in nearest:

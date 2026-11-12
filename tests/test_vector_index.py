@@ -7,6 +7,7 @@ import tracemalloc
 import unittest
 from array import array
 from pathlib import Path
+from unittest.mock import patch
 
 from minivectordb.engine import Engine
 from minivectordb.errors import DBError
@@ -234,6 +235,57 @@ class NativeIndexTests(unittest.TestCase):
         self.db.execute("UPDATE t SET v='[9,9,9,9]' WHERE id=3")
         self.db.execute('COMMIT')
         self.assertEqual(self.compare_reference(sql), [(0,)])
+
+    def test_ann_sq8_candidates_preserve_exact_and_filtered_paths(self):
+        self.db.execute(
+            'CREATE TABLE ann(id BIGINT PRIMARY KEY,tag VARCHAR(8),v VECTOR(128))')
+        self.db.execute(
+            'INSERT INTO ann VALUES ' + ','.join(
+                f"({i},'g{i % 3}','{[((i + j) % 64) / 64 for j in range(128)]}')"
+                for i in range(64)))
+        with patch('minivectordb.vector_index.SQ8_MIN_ROWS', 8):
+            self.db.execute('CREATE VECTOR INDEX ann_vi ON ann(v)')
+        table = self.db.table('ann')['id']
+        snapshot = self.db.vector_indexes.entries[table]
+        self.assertIsNone(snapshot.sq8)
+        zero = json.dumps([0.0] * 128)
+        query = (
+            f"SELECT id,L2_DISTANCE(v,'{zero}') AS d "
+            "FROM ann ORDER BY d LIMIT 10")
+        filtered_query = (
+            "SELECT id FROM ann WHERE tag='g1' "
+            f"ORDER BY L2_DISTANCE(v,'{zero}') LIMIT 3")
+        exact = self.query(query)
+        filtered_exact = self.query(filtered_query)
+        self.db.mode = 'ann'
+        calls = []
+        search_sq8 = self.db.vector_indexes.kernel.search_sq8
+
+        def tracked(*args):
+            calls.append(args[2] is not None)
+            return search_sq8(*args)
+
+        self.db.vector_indexes.kernel.search_sq8 = tracked
+        try:
+            with patch.multiple(
+                    'minivectordb.vector_index',
+                    SQ8_MIN_ROWS=8,
+                    SQ8_FILTER_MIN_ROWS=8):
+                self.assertEqual(self.query(query), exact)
+                self.assertEqual(self.query(filtered_query), filtered_exact)
+            self.assertEqual(calls, [False, True])
+            self.assertIsNotNone(snapshot.sq8)
+        finally:
+            self.db.vector_indexes.kernel.search_sq8 = search_sq8
+        replacement = json.dumps([0.5] * 128)
+        with patch('minivectordb.vector_index.SQ8_MIN_ROWS', 8):
+            self.db.execute(f"UPDATE ann SET v='{replacement}' WHERE id=0")
+            self.query(query)
+        rebuilt = self.db.vector_indexes.entries[table]
+        self.assertIsNotNone(rebuilt.sq8)
+        self.db.execute('DELETE FROM ann WHERE id=1')
+        self.assertIsNone(self.db.vector_indexes.entries[table].sq8)
+        self.db.mode = 'exact'
 
     def test_small_vector_snapshot_stays_in_memory(self):
         self.compare_reference("SELECT id FROM t ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 5")
