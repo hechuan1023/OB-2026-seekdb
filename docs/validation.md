@@ -1,5 +1,7 @@
 # MiniVectorDB 优化与验证记录
 
+2026-11-13 的干净 WAL 恢复、启动写入减少 4 KiB、两组重启 A/B 和完整资源回归见 [clean-wal-recovery-20261113.md](clean-wal-recovery-20261113.md)。
+
 2026-11-13 的批量向量解析切片复制消除、两组各 21 对写入 A/B 和完整资源回归见 [batch-vector-parse-slice-20261113.md](batch-vector-parse-slice-20261113.md)。
 
 2026-11-13 的 TopK 结果物化、原生 tuple 排序、SELECT 投影直出、三组多种子 A/B 和完整资源回归见 [python-topk-materialization-20261113.md](python-topk-materialization-20261113.md)。

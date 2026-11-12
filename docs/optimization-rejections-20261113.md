@@ -210,6 +210,41 @@ time, leaving too little CPU work for this change to overcome host variance.
 The source was reverted because it touched the storage core without a stable
 end-to-end gain.
 
+## OpenMP active wait policy
+
+`OMP_WAIT_POLICY=ACTIVE` was tested as a Docker-only runtime change for the
+two-CPU exact TopK path. An initial 6-pair in-container run had a 0.973129
+query median ratio, but only 4/6 pairs were faster. A second 10-pair run with a
+different seed had a 0.968989 median ratio and only 6/10 faster pairs.
+
+The decision test used the complete Docker JSONL pipe with 1,000 queries per
+round. Seven alternating pairs had a candidate/baseline query median ratio of
+1.012415, and the candidate was faster in only 3/7 pairs. Median write and peak
+memory ratios were 0.994806 and 0.999659, while every query still matched exact
+truth. The local in-container direction did not survive the full request path,
+so the Dockerfile environment change was reverted.
+
+## Python optimized mode
+
+`PYTHONOPTIMIZE=1` was tested as a Docker-only way to remove unused docstrings
+and reduce startup memory. The implementation contains no runtime assertions,
+so the change did not alter an internal correctness check.
+
+Seven alternating fresh-container pairs used the short 10,000-row write and
+query workload. Median write time was 4.70% slower, median cgroup peak memory
+was 1.34% higher, and the candidate reduced memory in 0/7 pairs. Short-query
+timing also regressed. The Dockerfile change was reverted.
+
+## Dot-product distance with precomputed row norms
+
+A direct AVX2 kernel prototype replaced each squared-difference reduction with
+`row_norm + query_norm - 2 * dot(row, query)` and precomputed float32 row norms.
+On the 10,000-row, 128-dimensional, 1,000-query scan shape, two alternating
+timings measured 0.118174/0.128662 s for the current reduction and
+0.110286/0.130010 s for the dot form. The direction reversed between runs, and
+the algebra would also require a broader floating-point error proof before it
+could safely select exact candidates. The prototype was removed.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
@@ -218,3 +253,5 @@ end-to-end gain.
 - OpenMP exact TopK for large filtered selections: commit `1202d21db`.
 - Self-written SQ8 ANN candidate filtering for benchmark-shaped unfiltered and
   filtered TopK; exact mode and fallback paths remain unchanged.
+- Clean-WAL recovery skips the unconditional startup truncate/`fsync`; see
+  `clean-wal-recovery-20261113.md`.

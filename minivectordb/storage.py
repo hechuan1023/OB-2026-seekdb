@@ -445,9 +445,12 @@ class Storage:
                 self._apply(record, offset, self.index, length)
                 failpoint('during_recovery')
             position = end + TRAILER.size
-        self.wal.truncate(position)
         self.wal.seek(position)
-        os.fsync(self.wal.fileno())
+        if position != size:
+            # Only an incomplete tail needs a durable truncation. A clean WAL
+            # is already authoritative and should not create startup I/O.
+            self.wal.truncate(position)
+            os.fsync(self.wal.fileno())
 
     def _apply(self, record, offset, index, length=None):
         if record[0] == 'schema':

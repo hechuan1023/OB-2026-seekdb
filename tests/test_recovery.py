@@ -6,6 +6,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from minivectordb.engine import Engine
 
@@ -121,6 +122,14 @@ class RecoveryTests(unittest.TestCase):
             client.close(kill=True)
         with self.client() as restarted:
             self.assertEqual(restarted.execute('SELECT * FROM t ORDER BY id'), [['1','99'], ['2','20']])
+
+    def test_clean_reopen_does_not_sync_the_wal(self):
+        import minivectordb.storage as storage_module
+
+        with mock.patch.object(storage_module.os, 'fsync', wraps=os.fsync) as sync:
+            db = Engine(self.directory)
+            db.close()
+        self.assertEqual(sync.call_count, 0)
 
     def test_uncommitted_transaction_is_discarded(self):
         client = Client(self.directory)
