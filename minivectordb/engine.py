@@ -483,9 +483,12 @@ class Engine:
                                                    self.matches, pk_only, self.mode)
                 if nearest is not None:
                     if pk_only:
-                        for key, distance in nearest:
-                            yield tuple(key if expr == pk_expression else distance
-                                        for expr in expressions)
+                        if expressions == [pk_expression, distance_expression]:
+                            yield from nearest
+                        else:
+                            for key, distance in nearest:
+                                yield tuple(key if expr == pk_expression else distance
+                                            for expr in expressions)
                     else:
                         for row, distance in nearest:
                             # The kernel path already evaluated this exact distance.

@@ -286,7 +286,11 @@ def _parse_fast_insert(sql):
 
 
 def parse(sql):
-    fast_insert = _parse_fast_insert(sql)
+    # The benchmark's SELECT path is already identified by its first six
+    # characters. Avoid running the INSERT prefix regex before the SELECT
+    # fast path; non-canonical whitespace still falls through to the full
+    # parser with identical semantics.
+    fast_insert = None if sql[:6].upper() == 'SELECT' else _parse_fast_insert(sql)
     if fast_insert is not None:
         return fast_insert
     match = FAST_DISTANCE_SELECT.fullmatch(sql)

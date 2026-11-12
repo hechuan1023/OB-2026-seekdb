@@ -106,6 +106,62 @@ and 0.4072 on clustered data. Raising the clustered result to 0.5786 required
 retained because it reached at least 0.9984 average recall on every tested
 distribution with 16 candidates.
 
+## Twelve SQ8 candidates
+
+The retained SQ8 path originally kept 22 float32 re-ranking candidates for the
+benchmark's `K=11`. A 12-candidate candidate filter passed the recall check on
+all tested distributions: mean Recall@10 was 0.9999 for uniform data, 0.99855
+for Gaussian data, and 0.97975 for clustered data across five seeds. The first
+21 alternating image pairs measured a total-query candidate/baseline median
+ratio of 0.968142 and all results matched exact IDs and distances.
+
+A second 21-pair run with seed 20261114 reversed the apparent gain: the total
+query ratio was 1.044244, filtered was 1.052682, and unfiltered was 1.038270.
+All results still matched, and the peak-memory ratio was 1.000260. The
+cross-seed direction was not stable enough to retain a lower recall margin, so
+the source was restored to 16 candidates, with the existing `keep * 2`
+minimum.
+
+## Double-accumulator SQ8 distance loop
+
+The SQ8 integer distance kernel was changed to use two vector accumulators.
+Direct-kernel A/B looked promising: seven-pair ratios were 0.961687 for
+unfiltered and 0.938255 for filtered scans, and a same-process engine check
+measured 0.976938 overall. Fresh-image validation did not reproduce the gain:
+11 pairs had a 1.032142 total-query ratio with only 3/11 pairs faster, and a
+second 21-pair run had a 1.018948 ratio. The source was reverted because the
+kernel-only improvement did not survive the complete request path.
+
+## Four-accumulator float32 exact scan
+
+The exact TopK float32 candidate scan was changed from two to four AVX2
+accumulators for 128-dimensional vectors. A direct two-library kernel A/B
+measured a 0.974851 median ratio for unfiltered scans (8/9 rounds faster) and
+0.985492 for filtered scans (6/9 rounds faster). A same-process engine A/B
+measured 0.992851 overall, but only 9/15 rounds were faster.
+
+The full shared-volume image A/B used 21 alternating pairs, 10,000 rows, 128
+dimensions, and 1,000 exact JSONL queries. The paired median candidate/baseline
+ratio was 1.000472 overall, 1.005583 filtered, and 0.999059 unfiltered. All
+results matched, but the kernel gain disappeared in the complete request path,
+so the source was restored to the existing two-accumulator implementation.
+
+## SQ8 residual-bound exact pruning
+
+An exact-mode prototype used SQ8 reconstruction error as a rigorous
+triangle-inequality lower bound. It first obtained an exact-distance upper bound
+from the nearest quantized rows, then scanned the selection again and exactly
+re-ranked only rows whose lower bound could enter the result. The proof and
+differential tests were sound, but the two quantized scans were more expensive
+than the existing float32 exact scan at the benchmark shape.
+
+Seven alternating in-container pairs measured a total-query candidate/baseline
+median ratio of 1.040911. Filtered queries were 0.969259, but unfiltered
+queries were 1.094276; only 2/7 total pairs were faster and peak memory was
+1.010721 times the baseline. A 32-byte AVX2 squared-difference loop also
+regressed the full path. Both source changes were reverted. The existing
+float32 candidate selection remains the exact-mode implementation.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.

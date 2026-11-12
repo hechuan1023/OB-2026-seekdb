@@ -744,13 +744,15 @@ class VectorIndexes:
                 # read both from the snapshot instead of probing the row index.
                 distance = exact[index] if exact is not None else math.dist(
                     snapshot.vector(position), expression[2])
-                verified.append((distance, key, key))
+                verified.append((distance, key))
             else:
                 row = self.storage.get(schema['id'], key)
                 distance = exact[index] if exact is not None else math.dist(
                     row[expression[1]], expression[2])
                 verified.append((distance, row[schema['pk']], row))
-        verified.sort(key=lambda item: (item[0], item[1]))
+        # Primary keys are unique, so tuple ordering never compares a row
+        # payload for non-pk_only results. Avoid building a separate key list.
+        verified.sort()
         if len(verified) > limit:
             a, b = verified[limit - 1][0], verified[limit][0]
             # Exact-distance boundary guard; ambiguous ties fall back to the
@@ -759,6 +761,8 @@ class VectorIndexes:
                 self.fallbacks += 1
                 return None
         # Hand the exact distance back so the projection does not recompute it.
+        if pk_only:
+            return [(key, distance) for distance, key in verified[:limit]]
         return [(item[2], item[0]) for item in verified[:limit]]
 
     def close(self):
