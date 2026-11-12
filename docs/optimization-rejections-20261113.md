@@ -36,7 +36,17 @@ end-to-end pairs measured 0.380772 s baseline and 0.385338 s candidate, a 1.20%
 median regression, with a median paired ratio of 1.0585. The microbenchmark did
 not survive the full request path, so the change was discarded.
 
+## Larger initial primary-key hash capacity
+
+The rebuildable primary-key hash started with 4096 slots instead of 1024 for a
+10,000-row, 128-dimension direct Engine write. Seven alternating fresh-container
+pairs measured 0.628730 s versus 0.659936 s median, a 4.96% regression, with a
+median paired ratio of 1.0440. The 4096-slot candidate was faster in only 1/7
+pairs; cgroup peak memory was effectively unchanged. The experiment was
+discarded and the 1024-slot default retained.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
 - TopK JSONL small-result single write: commit `630daca84`.
+- Cgroup-aware OpenMP exact TopK for large unfiltered scans: commit `c9a79d8e4`.
