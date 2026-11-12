@@ -66,6 +66,10 @@ _VECTOR_NUMERIC_TYPES = frozenset({int, float})
 
 
 class Engine:
+    # UPDATE/DELETE statements matching at most this many rows buffer their
+    # candidate rows in memory instead of a temp file; larger matches spill.
+    _MODIFY_BUFFER = 4096
+
     def __init__(self, directory, sort_memory=4 * 1024 * 1024, mode='exact', cache_memory=16 * 1024 * 1024,
                  checkpoint_bytes=64 * 1024 * 1024, native=True):
         require(mode in ('exact', 'ann'), 'UNSUPPORTED', 'Unknown search mode')
@@ -338,44 +342,67 @@ class Engine:
 
     def modify(self, schema, conditions, updates):
         # Freeze this statement's candidate rows before altering the overlay index.
-        fd, path = tempfile.mkstemp(prefix='modify-', suffix='.tmp', dir=self.storage.directory)
+        # Small candidate sets buffer in memory; a statement matching more than
+        # _MODIFY_BUFFER rows spills to the temp file so a huge UPDATE stays
+        # within memory limits. Both paths freeze candidates before the first
+        # modification, preserving statement atomicity.
+        buffered = []
+        pending = path = None
         count = 0
         try:
-            with os.fdopen(fd, 'w+b') as pending:
-                for row in self.candidates(schema, conditions):
-                    write_record(pending, row)
+            for row in self.candidates(schema, conditions):
+                if pending is None:
+                    if len(buffered) < self._MODIFY_BUFFER:
+                        buffered.append(row)
+                        continue
+                    fd, path = tempfile.mkstemp(prefix='modify-', suffix='.tmp',
+                                                dir=self.storage.directory)
+                    pending = os.fdopen(fd, 'w+b')
+                    for frozen in buffered:
+                        write_record(pending, frozen)
+                    buffered = None
+                write_record(pending, row)
+            if pending is not None:
                 pending.seek(0)
-                for row in file_rows(pending):
-                    key = row[schema['pk']]
-                    changed = None
-                    changed_columns = None
-                    if updates is not None:
-                        changed = list(row)
-                        for i, value in updates:
-                            changed[i] = value
-                        changed = tuple(changed)
-                        changed_columns = {i for i, _ in updates if row[i] != changed[i]}
-                    self.storage.append(('row', schema['id'], key, changed))
-                    if updates is None:
-                        # Delete: a tombstone is enough; the snapshot and filter
-                        # caches stay valid until too many tombstones accumulate.
-                        self.statement_deletes.setdefault(schema['id'], set()).add(key)
+            # Iterate the frozen candidates: from the buffer, or the spilled file.
+            if pending is not None:
+                frozen_rows = file_rows(pending)
+            else:
+                frozen_rows = iter(buffered)
+            for row in frozen_rows:
+                key = row[schema['pk']]
+                changed = None
+                changed_columns = None
+                if updates is not None:
+                    changed = list(row)
+                    for i, value in updates:
+                        changed[i] = value
+                    changed = tuple(changed)
+                    changed_columns = {i for i, _ in updates if row[i] != changed[i]}
+                self.storage.append(('row', schema['id'], key, changed))
+                if updates is None:
+                    # Delete: a tombstone is enough; the snapshot and filter
+                    # caches stay valid until too many tombstones accumulate.
+                    self.statement_deletes.setdefault(schema['id'], set()).add(key)
+                else:
+                    vector_columns = ({i for i in changed_columns
+                                       if schema['columns'][i][1] == 'VECTOR'}
+                                      if changed_columns else set())
+                    if vector_columns:
+                        # Row membership and hash slots are unchanged; record
+                        # the new vectors so the snapshot can be patched.
+                        column = next(iter(vector_columns))
+                        self.statement_vector_patches.setdefault(
+                            schema['id'], (column, {}))[1][key] = changed
+                        self.note_change(schema, changed_columns - vector_columns)
                     else:
-                        vector_columns = ({i for i in changed_columns
-                                           if schema['columns'][i][1] == 'VECTOR'}
-                                          if changed_columns else set())
-                        if vector_columns:
-                            # Row membership and hash slots are unchanged; record
-                            # the new vectors so the snapshot can be patched.
-                            column = next(iter(vector_columns))
-                            self.statement_vector_patches.setdefault(
-                                schema['id'], (column, {}))[1][key] = changed
-                            self.note_change(schema, changed_columns - vector_columns)
-                        else:
-                            self.note_change(schema, changed_columns)
-                    count += 1
+                        self.note_change(schema, changed_columns)
+                count += 1
         finally:
-            os.unlink(path)
+            if pending is not None:
+                pending.close()
+            if path is not None:
+                os.unlink(path)
         return count
 
     def bind_expression(self, schema, expression):

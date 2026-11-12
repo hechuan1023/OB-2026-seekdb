@@ -81,7 +81,9 @@ class Snapshot:
         force_files = (storage.index.count + overlay) * row_bytes > MEMORY_SNAPSHOT_LIMIT
         files = None
         try:
-            for row in storage.rows(schema['id']):
+            source = (storage.snapshot_rows(schema['id']) if force_files
+                      else storage.rows(schema['id']))
+            for row in source:
                 if files is None and force_files:
                     files = (open(self.paths[0], 'wb'), open(self.paths[1], 'wb'))
                 if files is None:
@@ -262,6 +264,28 @@ class VectorIndexes:
             self.filters.move_to_end(key)
             return self.filters[key][0]
         overhead = 256 + sum(sys.getsizeof(c) + sum(sys.getsizeof(v) for v in c) for c in conditions)
+        # Primary keys are already stored alongside the vectors.  Filtering
+        # only on that key must not reread every full row (and its vector),
+        # especially when the working set is larger than the page cache.
+        if (conditions[0][0] == schema['pk'] and
+                all(column == schema['pk'] for column, _, _ in conditions)):
+            selected = array('Q')
+            for position in range(snapshot.count):
+                current = snapshot.key(position)
+                if current in snapshot.deleted:
+                    continue
+                for _, op, value in conditions:
+                    if ((op == '=' and current != value) or
+                            (op == '<' and not current < value) or
+                            (op == '<=' and not current <= value) or
+                            (op == '>' and not current > value) or
+                            (op == '>=' and not current >= value)):
+                        break
+                else:
+                    selected.append(position)
+                    if sys.getsizeof(selected) + overhead > self.filter_budget:
+                        return False
+            return self._store_selection(key, selected, overhead)
         if len(conditions) == 1 and conditions[0][1] == '=':
             return self._equality_selection(schema, snapshot, conditions, key, overhead)
         selected = array('Q')
