@@ -328,8 +328,9 @@ class StatementScannerTests(unittest.TestCase):
 
 class NativeParserTests(unittest.TestCase):
     def setUp(self):
-        from minivectordb.native import parse_vector
+        from minivectordb.native import parse_vector, parse_vectors
         self.parse_vector = parse_vector
+        self.parse_vectors = parse_vectors
         if parse_vector('[0,0]', 2) is None:
             self.skipTest('Native parser not built')
 
@@ -350,6 +351,13 @@ class NativeParserTests(unittest.TestCase):
                            ('[1,]', 1), ('[1]x', 1), ('1', 1), ('[]', 1), ('[1,2]', 1),
                            ('[1,2]', 3), ('["1"]', 1)):
             self.assertIsNone(self.parse_vector(text, size), text)
+
+    def test_batch_parser_matches_individual_parser(self):
+        texts = ['[0,1]', '[-0.0,1e-45]', '[16777217,3.4028235e38]']
+        self.assertEqual(
+            self.parse_vectors(texts, 2),
+            [self.parse_vector(text, 2) for text in texts])
+        self.assertIsNone(self.parse_vectors(['[0,1]', '[01,2]'], 2))
 
 
 class NativeMemoryTests(unittest.TestCase):

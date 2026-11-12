@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from .errors import DBError, require
 from .native import distance as native_distance
-from .native import parse_vector
+from .native import parse_vector, parse_vectors
 from .sorting import Descending, Sorter, file_rows
 from .sql import parse
 from .storage import Storage, write_record
@@ -231,9 +231,24 @@ class Engine:
             columns = names
         require(len(columns) == len(names) and set(columns) == set(names), 'TYPE_ERROR', 'INSERT must supply each column exactly once')
         positions = [columns.index(name) for name in names]
-        for values in rows:
+        batched_vectors = {}
+        if (self.native and len(rows) > 1
+                and all(len(values) == len(names) for values in rows)):
+            for index, column in enumerate(schema['columns']):
+                if column[1] != 'VECTOR':
+                    continue
+                literals = [values[positions[index]] for values in rows]
+                if any(literal.kind != 'string' for literal in literals):
+                    continue
+                parsed = parse_vectors([literal.value for literal in literals],
+                                       column[2])
+                if parsed is not None:
+                    batched_vectors[index] = parsed
+        for row_index, values in enumerate(rows):
             require(len(values) == len(names), 'TYPE_ERROR', 'Wrong number of values')
-            row = tuple([convert(values[positions[i]], col, self.native)
+            row = tuple([batched_vectors[i][row_index]
+                         if i in batched_vectors else
+                         convert(values[positions[i]], col, self.native)
                          for i, col in enumerate(schema['columns'])])
             key = row[schema['pk']]
             require(self.storage.get(schema['id'], key) is None, 'CONSTRAINT_ERROR', 'Duplicate primary key')

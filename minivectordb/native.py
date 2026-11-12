@@ -11,13 +11,14 @@ from array import array
 from pathlib import Path
 
 _parse_vector = None
+_parse_vectors = None
 _exact_distance = None
 _exact_distances = None
 _loaded = False
 
 
 def _library():
-    global _parse_vector, _exact_distance, _exact_distances, _loaded
+    global _parse_vector, _parse_vectors, _exact_distance, _exact_distances, _loaded
     if _loaded:
         return _parse_vector
     _loaded = True
@@ -30,6 +31,16 @@ def _library():
         parse.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t]
         parse.restype = ctypes.c_int64
         _parse_vector = parse
+        try:
+            batch_parse = library.mv_parse_vectors
+        except AttributeError:
+            _parse_vectors = None
+        else:
+            batch_parse.argtypes = [ctypes.POINTER(ctypes.c_char_p),
+                                    ctypes.POINTER(ctypes.c_size_t),
+                                    ctypes.c_size_t, ctypes.c_size_t, ctypes.c_void_p]
+            batch_parse.restype = ctypes.c_int64
+            _parse_vectors = batch_parse
         exact = library.mv_exact_distance
         exact.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t]
         exact.restype = ctypes.c_double
@@ -40,7 +51,7 @@ def _library():
         batch.restype = ctypes.c_int64
         _exact_distances = batch
     except (OSError, AttributeError):
-        _parse_vector = _exact_distance = _exact_distances = None
+        _parse_vector = _parse_vectors = _exact_distance = _exact_distances = None
     return _parse_vector
 
 
@@ -83,3 +94,23 @@ def parse_vector(text, size):
     if parse(raw, len(raw), values.buffer_info()[0], size) != size:
         return None
     return values
+
+
+def parse_vectors(texts, size):
+    """Parse multiple JSON vectors, or return None to use the per-value path."""
+    parse = _library()
+    if parse is None or _parse_vectors is None or not texts:
+        return None
+    try:
+        encoded = [text.encode('utf-8') for text in texts]
+    except UnicodeEncodeError:
+        return None
+    pointers = (ctypes.c_char_p * len(encoded))(*encoded)
+    lengths = (ctypes.c_size_t * len(encoded))(*(len(raw) for raw in encoded))
+    flat = array('f', [0.0]) * (size * len(encoded))
+    returned = _parse_vectors(pointers, lengths, len(encoded), size,
+                              flat.buffer_info()[0])
+    if returned != len(encoded):
+        return None
+    return [array('f', flat[start:start + size])
+            for start in range(0, len(flat), size)]

@@ -221,6 +221,22 @@ MV_EXPORT std::int64_t mv_parse_vector(const char *text, std::size_t length,
   return p == end ? static_cast<std::int64_t>(count) : -1;
 }
 
+// Parse a statement's vector literals in one call. The return value is the
+// number of successfully parsed vectors, or the zero-based index of the first
+// invalid literal. Callers fall back to the per-value path on failure so the
+// original error ordering and accepted language stay unchanged.
+MV_EXPORT std::int64_t mv_parse_vectors(
+    const char *const *texts, const std::size_t *lengths, std::size_t count,
+    std::size_t dimensions, float *out) {
+  if ((!texts || !lengths || !out) && count) return -1;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (mv_parse_vector(texts[i], lengths[i], out + i * dimensions,
+                        dimensions) != static_cast<std::int64_t>(dimensions))
+      return static_cast<std::int64_t>(i);
+  }
+  return static_cast<std::int64_t>(count);
+}
+
 MV_EXPORT int mv_abi_version() { return 1; }
 
 // Exact double-precision distance, shared by native verification and the
