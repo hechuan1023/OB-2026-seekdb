@@ -1,5 +1,7 @@
 # MiniVectorDB 优化与验证记录
 
+2026-11-13 的小 K 有序候选收集器、同进程内核／完整 TopK A/B、同一数据卷 7 轮端到端对照及完整资源回归见 [sorted-small-k-20261113.md](sorted-small-k-20261113.md)。
+
 2026-11-13 的快照等值分组预收集实验、1,000 次查询对照、64 MiB 超内存验证和已拒绝的原始值缓存方案见 [precollect-filter-groups-20261113.md](precollect-filter-groups-20261113.md)。
 
 最新公开 v4 题包的 20 组验证、106 项回归和镜像恢复结果见 [public-v4-validation.md](public-v4-validation.md)。此前用户报告正式提测未通过，具体原因未获日志确认；本地验证不代表正式准入。

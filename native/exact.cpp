@@ -290,8 +290,11 @@ __attribute__((always_inline)) static inline std::int64_t topk_body(
   const std::uint64_t count = selection ? selected : rows;
   keep = std::min(keep, count);
   try {
-    std::vector<Candidate> heap;
-    heap.reserve(static_cast<std::size_t>(keep));
+    // Keep the candidates in ascending order. The benchmark's K=11 is small,
+    // and improvements are rare after the first few rows, so a linear
+    // insertion is cheaper than maintaining a heap and sorting it afterwards.
+    std::vector<Candidate> ranked;
+    ranked.reserve(static_cast<std::size_t>(keep));
     for (std::uint64_t n = 0; n < count; ++n) {
       const std::uint64_t row = selection ? selection[n] : n;
       if (row >= rows) return -1;
@@ -300,21 +303,19 @@ __attribute__((always_inline)) static inline std::int64_t topk_body(
       // its boundary guard only needs a monotone key.
       const Candidate item{Distance(vectors + row * width, query, width),
                            keys[row], row};
-      if (heap.size() < keep) {
-        heap.push_back(item);
-        std::push_heap(heap.begin(), heap.end(), better);
-      } else if (better(item, heap.front())) {
-        std::pop_heap(heap.begin(), heap.end(), better);
-        heap.back() = item;
-        std::push_heap(heap.begin(), heap.end(), better);
-      }
+      if (ranked.size() == keep && !better(item, ranked.back()))
+        continue;
+      const auto at = std::lower_bound(ranked.begin(), ranked.end(), item,
+                                       better);
+      ranked.insert(at, item);
+      if (ranked.size() > keep)
+        ranked.pop_back();
     }
-    std::sort(heap.begin(), heap.end(), better);
-    for (std::size_t i = 0; i < heap.size(); ++i) {
-      positions[i] = heap[i].position;
-      distances[i] = heap[i].distance;
+    for (std::size_t i = 0; i < ranked.size(); ++i) {
+      positions[i] = ranked[i].position;
+      distances[i] = ranked[i].distance;
     }
-    return static_cast<std::int64_t>(heap.size());
+    return static_cast<std::int64_t>(ranked.size());
   } catch (...) {
     return -1;  // No C++ exception may escape the C ABI.
   }
