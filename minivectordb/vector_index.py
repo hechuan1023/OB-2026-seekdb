@@ -13,6 +13,7 @@ from array import array
 from collections import OrderedDict
 from pathlib import Path
 
+from .native import distances as native_distances
 from .storage import failpoint
 
 KEY = struct.Struct('<q')
@@ -78,7 +79,8 @@ class NativeKernel:
         keep = min(keep, count)
         if not keep:
             return []
-        query = array('f', query)
+        if type(query) is not array:
+            query = array('f', query)
         positions = array('Q', [0]) * keep
         distances = array('d', [0]) * keep
         returned = search(self.address(snapshot.vectors), self.address(snapshot.keys),
@@ -480,18 +482,24 @@ class VectorIndexes:
             nearest = self.kernel.topk(snapshot, expression[2], selected, keep)
         self.searches += 1
         verified = []
-        for position, _ in nearest:
+        # One native call re-evaluates every candidate in double precision; the
+        # generic executor uses the same loop, so both paths agree bit for bit.
+        candidates = array('Q', [position for position, _ in nearest])
+        exact = native_distances(self.kernel.address(snapshot.vectors), expression[2], candidates)
+        for index, (position, _) in enumerate(nearest):
             key = snapshot.key(position)
             if key in deleted:
                 continue
             if pk_only:
                 # The projection only needs the primary key and the distance:
                 # read both from the snapshot instead of probing the row index.
-                distance = math.dist(snapshot.vector(position), expression[2])
+                distance = exact[index] if exact is not None else math.dist(
+                    snapshot.vector(position), expression[2])
                 verified.append((distance, key, key))
             else:
                 row = self.storage.get(schema['id'], key)
-                distance = math.dist(row[expression[1]], expression[2])
+                distance = exact[index] if exact is not None else math.dist(
+                    row[expression[1]], expression[2])
                 verified.append((distance, row[schema['pk']], row))
         verified.sort(key=lambda item: (item[0], item[1]))
         if len(verified) > limit:

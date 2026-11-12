@@ -10,6 +10,7 @@ from array import array
 from dataclasses import dataclass
 
 from .errors import DBError, require
+from .native import distance as native_distance
 from .native import parse_vector
 from .sorting import Descending, Sorter, file_rows
 from .sql import parse
@@ -412,7 +413,10 @@ class Engine:
         i = self.column(schema, expression[1])
         require(schema['columns'][i][1] == 'VECTOR', 'TYPE_ERROR', 'L2_DISTANCE requires VECTOR')
         vector = convert(expression[2], schema['columns'][i], self.native)
-        return ('distance', i, tuple(vector))
+        # Keep the array: the native kernel and distance functions consume its
+        # buffer directly. The generic sorter path converts it to a tuple only
+        # where a hashable expression is required.
+        return ('distance', i, vector)
 
     @staticmethod
     def evaluate(row, expression):
@@ -420,7 +424,7 @@ class Engine:
             value = row[expression[1]]
             # Do not expose the mutable array held by an immutable cached version.
             return array('f', value) if isinstance(value, array) else value
-        return math.dist(row[expression[1]], expression[2])
+        return native_distance(row[expression[1]], expression[2])
 
     def select(self, table, projections, where, order, limit):
         schema = self.table(table)
@@ -482,11 +486,23 @@ class Engine:
                 return
             # Bind shared expressions once. A distance expression contains the
             # query vector: hashing it for every row repeatedly hashes all its
-            # dimensions. Only the generic sorter path needs the slot table.
-            unique = list(dict.fromkeys(expressions + [expr for expr, _ in sort_keys]))
-            slots = {expr: i for i, expr in enumerate(unique)}
-            projection_slots = [slots[expr] for expr in expressions]
-            order_slots = [(slots[expr], descending) for expr, descending in sort_keys]
+            # dimensions. Only the generic sorter path needs the slot table, so
+            # convert the query array to a hashable tuple here.
+            def hashable(expr):
+                return (expr[0], expr[1], tuple(expr[2])) if expr[0] == 'distance' else expr
+            projection_expressions = [hashable(expr) for expr in expressions]
+            order_expressions = [hashable(expr) for expr, _ in sort_keys]
+            unique_hashable = list(dict.fromkeys(projection_expressions + order_expressions))
+            originals = {}
+            for expr, key in zip(expressions, projection_expressions):
+                originals[key] = expr
+            for (expr, _), key in zip(sort_keys, order_expressions):
+                originals[key] = expr
+            unique = [originals[key] for key in unique_hashable]
+            slots = {key: i for i, key in enumerate(unique_hashable)}
+            projection_slots = [slots[key] for key in projection_expressions]
+            order_slots = [(slots[key], descending) for key, (_, descending)
+                           in zip(order_expressions, sort_keys)]
             sorter = Sorter(self.storage.directory, self.sort_memory, limit)
             try:
                 for row in candidates:

@@ -32,7 +32,19 @@ class Float32SelectionTests(unittest.TestCase):
         return list(self.db.execute(sql).rows)
 
     def check_against_reference(self, sql, truth):
-        self.assertEqual(self.query(sql), truth)
+        self.assert_rows(self.query(sql), truth)
+
+    def assert_rows(self, rows, truth):
+        """IDs and order must match exactly; distances use a tight tolerance.
+
+        The native path evaluates distances with an ordered double loop, which
+        differs from math.dist only in the last bits (about 1e-15 relative,
+        far inside the official 1e-5 tolerance).
+        """
+        self.assertEqual([row[0] for row in rows], [row[0] for row in truth])
+        for row, expected in zip(rows, truth):
+            self.assertTrue(math.isclose(row[1], expected[1], rel_tol=1e-12, abs_tol=1e-12),
+                            f'{row} != {expected}')
 
     def check_both_kernels(self, sql):
         kernel = self.db.vector_indexes.kernel
@@ -82,7 +94,7 @@ class Float32SelectionTests(unittest.TestCase):
                     candidates = [(key, math.dist(vector, query))
                                   for key, vector in values.items() if selected(key)]
                     truth = sorted(candidates, key=lambda item: (item[1], item[0]))[:limit]
-                    self.assertEqual(rows, truth)
+                    self.assert_rows(rows, truth)
 
     def test_all_equal_vectors_and_ties(self):
         self.db.execute('CREATE TABLE t(id BIGINT PRIMARY KEY,tag VARCHAR(8),v VECTOR(3))')
@@ -117,7 +129,7 @@ class Float32SelectionTests(unittest.TestCase):
                 f"SELECT id,L2_DISTANCE(v,'{query}') AS d FROM t ORDER BY d LIMIT 6")
             truth = sorted(((key, math.dist(vector, narrowed)) for key, vector in stored.items()),
                            key=lambda item: (item[1], item[0]))
-            self.assertEqual(rows, truth)
+            self.assert_rows(rows, truth)
 
     def test_dimensions_around_simd_boundaries(self):
         for dimensions in (1, 2, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 129):
@@ -151,7 +163,7 @@ class Float32SelectionTests(unittest.TestCase):
                     truth = sorted(((key, math.dist(vector, query))
                                     for key, vector in values.items()),
                                    key=lambda item: (item[1], item[0]))[:10]
-                    self.assertEqual(fast, truth)
+                    self.assert_rows(fast, truth)
 
     def test_mutations_keep_both_kernels_consistent(self):
         values = self.build(4, 200)
@@ -180,7 +192,7 @@ class Float32SelectionTests(unittest.TestCase):
             "SELECT id,L2_DISTANCE(v,'[1.0,0.0]') AS d FROM t ORDER BY d LIMIT 10")
         truth = sorted(((key, math.dist([f32(1.0 + key * 1e-7), f32(0.0)], [1.0, 0.0]))
                         for key in range(100)), key=lambda item: (item[1], item[0]))[:10]
-        self.assertEqual(rows, truth)
+        self.assert_rows(rows, truth)
 
 
 if __name__ == '__main__':

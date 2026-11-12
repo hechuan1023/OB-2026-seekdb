@@ -223,6 +223,36 @@ MV_EXPORT std::int64_t mv_parse_vector(const char *text, std::size_t length,
 
 MV_EXPORT int mv_abi_version() { return 1; }
 
+// Exact double-precision distance, shared by native verification and the
+// Python fallback path so both produce identical bits. A plain ordered sum is
+// deterministic; it differs from math.dist only in the last bits, far inside
+// the official 1e-5 tolerance.
+static inline double exact_distance(const float *__restrict v,
+                                    const float *__restrict query,
+                                    std::uint64_t dimensions) {
+  double sum = 0.0;
+  for (std::uint64_t j = 0; j < dimensions; ++j) {
+    const double delta = static_cast<double>(v[j]) - static_cast<double>(query[j]);
+    sum += delta * delta;
+  }
+  return std::sqrt(sum);
+}
+
+MV_EXPORT double mv_exact_distance(const float *v, const float *query,
+                                   std::uint64_t dimensions) noexcept {
+  if (!v || !query || !dimensions) return 0.0;
+  return exact_distance(v, query, dimensions);
+}
+
+MV_EXPORT std::int64_t mv_exact_distances(
+    const float *vectors, const float *query, const std::uint64_t *positions,
+    std::uint64_t count, std::uint64_t dimensions, double *out) noexcept {
+  if (!vectors || !query || !positions || !out || !dimensions) return -1;
+  for (std::uint64_t i = 0; i < count; ++i)
+    out[i] = exact_distance(vectors + positions[i] * dimensions, query, dimensions);
+  return static_cast<std::int64_t>(count);
+}
+
 // Retain K+1 candidates. Python verifies a conservative boundary gap, re-evaluates
 // selected distances with math.dist, and falls back on ambiguous boundaries.
 // The distance function is a template value so it can be inlined; a function
