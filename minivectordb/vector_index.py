@@ -27,6 +27,15 @@ MEMORY_SNAPSHOT_LIMIT = 8 * 1024 * 1024
 # indices stay aligned with snapshot positions.
 DELETED = object()
 
+# Float32 candidate selection is only trusted when the (keep+margin)-th
+# squared distance is clearly larger than the keep-th. The per-dimension
+# coefficient is twice the float32 unit roundoff (subtraction and product each
+# round once); the absolute term covers subnormal underflow. The observed
+# random-data boundary ratio for 128 dimensions is above 1.01.
+F32_MARGIN = 16
+F32_ROUNDING = 2.4e-7
+F32_SUBNORMAL = 6e-45
+
 
 class NativeKernel:
     def __init__(self):
@@ -35,15 +44,21 @@ class NativeKernel:
         if self.library.mv_abi_version() != 1:
             raise RuntimeError('Unsupported native kernel ABI')
         self.search = self.library.mv_topk
+        self.search_f32 = None
         try:
             if self.library.mv_has_fma():
                 self.search = self.library.mv_topk_fma
+                # Candidate-only kernel: float32 distances, exact re-check later.
+                self.search_f32 = self.library.mv_topk_f32
         except AttributeError:
             pass  # Older library: keep the portable kernel.
         self.search.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64,
                                ctypes.c_uint64, ctypes.c_void_p, ctypes.c_void_p,
                                ctypes.c_uint64, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_void_p]
         self.search.restype = ctypes.c_int64
+        if self.search_f32 is not None:
+            self.search_f32.argtypes = self.search.argtypes
+            self.search_f32.restype = ctypes.c_int64
 
     @staticmethod
     def address(buffer):
@@ -52,6 +67,13 @@ class NativeKernel:
         return ctypes.addressof(ctypes.c_char.from_buffer(buffer))
 
     def topk(self, snapshot, query, selected, keep):
+        return self._run(self.search, snapshot, query, selected, keep)
+
+    def topk_f32(self, snapshot, query, selected, keep):
+        """Float32 candidate selection; distances are squared and approximate."""
+        return self._run(self.search_f32, snapshot, query, selected, keep)
+
+    def _run(self, search, snapshot, query, selected, keep):
         count = snapshot.count if selected is None else len(selected)
         keep = min(keep, count)
         if not keep:
@@ -59,10 +81,10 @@ class NativeKernel:
         query = array('f', query)
         positions = array('Q', [0]) * keep
         distances = array('d', [0]) * keep
-        returned = self.search(self.address(snapshot.vectors), self.address(snapshot.keys),
-                               snapshot.count, snapshot.dimensions, query.buffer_info()[0],
-                               selected.buffer_info()[0] if selected is not None else None,
-                               count, keep, positions.buffer_info()[0], distances.buffer_info()[0])
+        returned = search(self.address(snapshot.vectors), self.address(snapshot.keys),
+                          snapshot.count, snapshot.dimensions, query.buffer_info()[0],
+                          selected.buffer_info()[0] if selected is not None else None,
+                          count, keep, positions.buffer_info()[0], distances.buffer_info()[0])
         if returned != keep:
             raise RuntimeError('Native exact search failed')
         return list(zip(positions, distances))
@@ -410,7 +432,31 @@ class VectorIndexes:
         keep = limit + 1 + (len(deleted) if selected is None else 0)
         if keep > self.max_keep:
             return None
-        nearest = self.kernel.topk(snapshot, expression[2], selected, keep)
+        available = snapshot.count if selected is None else len(selected)
+        nearest = None
+        if self.kernel.search_f32 is not None:
+            # Float32 selection is a candidate filter, not the answer. The
+            # margin below proves that no row outside the returned set can
+            # enter the exact top `keep`; otherwise fall back to the exact
+            # double kernel. Only candidates inside the uncertainty band of
+            # the keep-th squared distance need exact re-evaluation.
+            requested = min(keep + F32_MARGIN, available)
+            candidates = self.kernel.topk_f32(snapshot, expression[2], selected, requested)
+            if requested >= available:
+                nearest = candidates  # Every row was already a candidate.
+            else:
+                dimensions = snapshot.dimensions
+                error = min(0.25, (dimensions + 1) * F32_ROUNDING)
+                slack = (dimensions + 1) * F32_SUBNORMAL
+                threshold = candidates[keep - 1][1]
+                if candidates[-1][1] > threshold * (1.0 + 4.0 * error) + 4.0 * slack:
+                    bound = threshold * (1.0 + 2.0 * error) + 2.0 * slack
+                    count = keep
+                    while count < len(candidates) and candidates[count][1] <= bound:
+                        count += 1
+                    nearest = candidates[:count]
+        if nearest is None:
+            nearest = self.kernel.topk(snapshot, expression[2], selected, keep)
         self.searches += 1
         verified = []
         for position, _ in nearest:

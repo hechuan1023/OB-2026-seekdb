@@ -72,6 +72,40 @@ static inline double distance_squared(const float *__restrict v,
 }
 
 #if defined(__x86_64__) || defined(__i386__)
+// Single-precision reduction used only to *select* candidates. The caller
+// re-evaluates the selected rows in double precision and falls back to the
+// exact kernel unless the float32 candidate boundary is far enough from the
+// kept set (see vector_index.py). Eight lanes per accumulator keep the
+// summation order fixed and let one AVX2 register hold eight dimensions.
+__attribute__((target("avx2,fma"))) static inline float
+distance_f32(const float *__restrict v, const float *__restrict query,
+             std::uint64_t dimensions) {
+  __m256 a0 = _mm256_setzero_ps(), a1 = _mm256_setzero_ps();
+  std::uint64_t j = 0;
+  for (; j + 16 <= dimensions; j += 16) {
+    const __m256 d0 = _mm256_sub_ps(_mm256_loadu_ps(v + j), _mm256_loadu_ps(query + j));
+    const __m256 d1 = _mm256_sub_ps(_mm256_loadu_ps(v + j + 8), _mm256_loadu_ps(query + j + 8));
+    a0 = _mm256_fmadd_ps(d0, d0, a0);
+    a1 = _mm256_fmadd_ps(d1, d1, a1);
+  }
+  for (; j + 8 <= dimensions; j += 8) {
+    const __m256 d = _mm256_sub_ps(_mm256_loadu_ps(v + j), _mm256_loadu_ps(query + j));
+    a0 = _mm256_fmadd_ps(d, d, a0);
+  }
+  __m256 sum = _mm256_add_ps(a0, a1);
+  const __m128 lo = _mm256_castps256_ps128(sum);
+  const __m128 hi = _mm256_extractf128_ps(sum, 1);
+  __m128 pair = _mm_add_ps(lo, hi);
+  pair = _mm_hadd_ps(pair, pair);
+  pair = _mm_hadd_ps(pair, pair);
+  float total = _mm_cvtss_f32(pair);
+  for (; j < dimensions; ++j) {
+    const float delta = v[j] - query[j];
+    total += delta * delta;
+  }
+  return total;
+}
+
 // Explicit FMA reduction for CPUs that support it. The two accumulators and the
 // horizontal sum use a different rounding order than distance_squared, so the
 // values can differ in the last bits; Python's 1e-12 boundary guard and its
@@ -253,6 +287,19 @@ MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t mv_topk_fma(
     std::uint64_t selected, std::uint64_t keep,
     std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
   return topk_impl(distance_fma, vectors, keys, rows, dimensions, query,
+                   selection, selected, keep, positions, distances);
+}
+
+// Candidate-selection kernel: float32 distances, same heap and tie-break.
+// Callers must verify the returned rows in double precision and prove the
+// candidate boundary is unambiguous before trusting the result.
+MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t mv_topk_f32(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t rows, std::uint64_t dimensions,
+    const float *__restrict query, const std::uint64_t *__restrict selection,
+    std::uint64_t selected, std::uint64_t keep,
+    std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
+  return topk_impl(distance_f32, vectors, keys, rows, dimensions, query,
                    selection, selected, keep, positions, distances);
 }
 
