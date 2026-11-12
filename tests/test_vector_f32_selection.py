@@ -347,7 +347,7 @@ class Float32SelectionTests(unittest.TestCase):
             run(small, query, 10, 1),
         )
 
-    def test_openmp_route_uses_threads_only_without_filter(self):
+    def test_openmp_route_uses_threads_for_large_filtered_selection(self):
         kernel = self.db.vector_indexes.kernel
         if kernel.search_f32_exact_omp is None:
             self.skipTest('OpenMP exact kernel not available')
@@ -373,14 +373,19 @@ class Float32SelectionTests(unittest.TestCase):
             kernel.search_threads = 2
             threaded = kernel.topk_f32_exact(snapshot, query, None, 11)
             filtered = kernel.topk_f32_exact(snapshot, query, selected, 11)
+            small = array('Q', range(0, 100))
+            small_filtered = kernel.topk_f32_exact(snapshot, query, small, 11)
             kernel.search_threads = 1
             sequential = kernel.topk_f32_exact(snapshot, query, None, 11)
             filtered_sequential = kernel.topk_f32_exact(
                 snapshot, query, selected, 11)
+            small_sequential = kernel.topk_f32_exact(
+                snapshot, query, small, 11)
         finally:
             kernel.search_threads = old_threads
         self.assertEqual(threaded, sequential)
         self.assertEqual(filtered, filtered_sequential)
+        self.assertEqual(small_filtered, small_sequential)
 
 
 if __name__ == '__main__':

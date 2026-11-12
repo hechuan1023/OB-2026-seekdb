@@ -17,7 +17,7 @@ python -m tests.validate_submission --git
 
 本文件与当前源码一同纳入 Git；不在提交内容中写入它自身的 commit SHA，以免产生循环依赖。源码字节摘要见 source-manifest.json，材料中的 version 与其一致。
 
-当前版本基于官方 `f4d4e26653af823a7601668802f80e374ad6643c` 的公开协议，官方驱动对实际镜像的握手和 20 组用例通过；Windows/Linux 完整回归各 180 项通过。按 cgroup CPU 配额启用的双线程 exact TopK 的内核、容器和宿主侧对照及限制见 [OpenMP 优化记录](openmp-exact-20261113.md)。历史性能报告保留为原版本结果，本轮不宣称官方性能提升。
+当前版本基于官方 `f4d4e26653af823a7601668802f80e374ad6643c` 的公开协议，官方驱动对实际镜像的握手和 20 组用例通过；Windows/Linux 完整回归各 180 项通过。按 cgroup CPU 配额启用的无过滤大表及大过滤集 exact TopK 并行扫描、内核/端到端对照及限制见 [OpenMP 优化记录](openmp-exact-20261113.md)。历史性能报告保留为原版本结果，本轮不宣称官方性能提升。
 
 | 产物 | 位置与状态 |
 | --- | --- |

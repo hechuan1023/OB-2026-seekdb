@@ -166,12 +166,17 @@ class NativeKernel:
         positions = array('Q', [0]) * keep
         distances = array('d', [0]) * keep
         exact = array('d', [0]) * keep
-        if (selected is None and self.search_f32_exact_omp is not None
-                and self.search_threads > 1 and snapshot.count >= 4096):
+        use_openmp = (
+            self.search_f32_exact_omp is not None and self.search_threads > 1
+            and ((selected is None and snapshot.count >= 4096)
+                 or (selected is not None and len(selected) >= 1024))
+        )
+        if use_openmp:
             returned = self.search_f32_exact_omp(
                 self.address(snapshot.vectors), self.address(snapshot.keys),
                 snapshot.count, snapshot.dimensions, query.buffer_info()[0],
-                None, count, keep, self.search_threads,
+                selected.buffer_info()[0] if selected is not None else None,
+                count, keep, self.search_threads,
                 positions.buffer_info()[0], distances.buffer_info()[0],
                 exact.buffer_info()[0])
         else:
