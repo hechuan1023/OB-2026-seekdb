@@ -54,8 +54,20 @@ per-query median was 80.80 µs versus 87.11 µs and the candidate won only 3/7
 pairs. The fixed-buffer path was therefore discarded; the allocation-light
 micro-optimization did not survive the real kernel path.
 
+## Precompiled structs in compact row encoding
+
+The compact row encoder reused precompiled `struct.Struct` instances instead of
+calling `struct.pack` for every table/key, count, integer and length field. The
+encoded bytes were identical. A same-process microbenchmark over 10,000 vector
+rows and 1,000 deletes improved by about 6.4% in the container, but seven
+alternating fresh-container writes measured 1.380807 s baseline and 1.425950 s
+candidate. The candidate won only 2/7 pairs and the median paired ratio was
+1.0036, a 0.36% regression. The change was reverted because the encoder gain was
+too small relative to commit `fsync` and host noise.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
 - TopK JSONL small-result single write: commit `630daca84`.
 - Cgroup-aware OpenMP exact TopK for large unfiltered scans: commit `c9a79d8e4`.
+- OpenMP exact TopK for large filtered selections: commit `1202d21db`.
