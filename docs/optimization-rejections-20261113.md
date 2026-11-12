@@ -177,6 +177,39 @@ continuation test exposed the same flaw. The prototype was reverted without
 performance testing. Any future single-probe design must check both the overlay
 and committed index before reusing an empty overlay slot.
 
+## Reused overlay probe with committed-index validation
+
+A second prototype retained both duplicate checks but reused the transaction
+overlay's empty-slot probe when updating the index after staging the row. It
+still checked the committed index when the overlay had no entry, and it rechecked
+the slot after any resize or race. Targeted transaction tests passed, including
+a committed duplicate after an earlier update and a delete followed by reinsert.
+
+Seven alternating fresh-container pairs used the same 10,000-row,
+128-dimensional write workload. The baseline median was 2.482943 s and the
+candidate median was 2.474086 s, but the median paired candidate/baseline ratio
+was 1.008934: the candidate was faster in only 2/7 pairs. The median cgroup peak
+memory ratio was 1.000455 and every query still matched exact truth. The source
+and its two new tests were reverted because the apparent 0.36% median difference
+was smaller than the host variance and had no stable direction.
+
+## Publish the transaction overlay directly after commit
+
+The normal commit path synchronized the WAL, then decoded every staged record
+again to update the rebuildable primary index. A candidate translated the final
+offset already held by the transaction overlay into the WAL and published that
+state directly after `fsync`, while retaining the same WAL format, durability
+point and crash-recovery fallback.
+
+The focused transaction, index-lifecycle, recovery and snapshot suites passed
+63/63. In seven alternating fresh-container pairs, however, the median paired
+candidate/baseline write ratio was 1.005429 and the candidate was faster in only
+3/7 pairs. The baseline and candidate medians were 2.513930 s and 2.511051 s,
+respectively. `fsync` remained roughly 80% of the candidate's measured commit
+time, leaving too little CPU work for this change to overcome host variance.
+The source was reverted because it touched the storage core without a stable
+end-to-end gain.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
