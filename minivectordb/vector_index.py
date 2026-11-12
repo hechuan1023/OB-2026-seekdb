@@ -45,11 +45,13 @@ class NativeKernel:
             raise RuntimeError('Unsupported native kernel ABI')
         self.search = self.library.mv_topk
         self.search_f32 = None
+        self.search_f32_exact = None
         try:
             if self.library.mv_has_fma():
                 self.search = self.library.mv_topk_fma
                 # Candidate-only kernel: float32 distances, exact re-check later.
                 self.search_f32 = self.library.mv_topk_f32
+                self.search_f32_exact = getattr(self.library, 'mv_topk_f32_exact', None)
         except AttributeError:
             pass  # Older library: keep the portable kernel.
         self.search.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64,
@@ -59,6 +61,9 @@ class NativeKernel:
         if self.search_f32 is not None:
             self.search_f32.argtypes = self.search.argtypes
             self.search_f32.restype = ctypes.c_int64
+        if self.search_f32_exact is not None:
+            self.search_f32_exact.argtypes = self.search.argtypes + [ctypes.c_void_p]
+            self.search_f32_exact.restype = ctypes.c_int64
 
     @staticmethod
     def address(buffer):
@@ -72,6 +77,27 @@ class NativeKernel:
     def topk_f32(self, snapshot, query, selected, keep):
         """Float32 candidate selection; distances are squared and approximate."""
         return self._run(self.search_f32, snapshot, query, selected, keep)
+
+    def topk_f32_exact(self, snapshot, query, selected, keep):
+        """Return candidate positions, selection distances, and exact distances."""
+        count = snapshot.count if selected is None else len(selected)
+        keep = min(keep, count)
+        if not keep:
+            return array('Q'), array('d'), array('d')
+        if type(query) is not array:
+            query = array('f', query)
+        positions = array('Q', [0]) * keep
+        distances = array('d', [0]) * keep
+        exact = array('d', [0]) * keep
+        returned = self.search_f32_exact(
+            self.address(snapshot.vectors), self.address(snapshot.keys),
+            snapshot.count, snapshot.dimensions, query.buffer_info()[0],
+            selected.buffer_info()[0] if selected is not None else None,
+            count, keep, positions.buffer_info()[0], distances.buffer_info()[0],
+            exact.buffer_info()[0])
+        if returned != keep:
+            raise RuntimeError('Native exact search failed')
+        return positions, distances, exact
 
     def _run(self, search, snapshot, query, selected, keep):
         count = snapshot.count if selected is None else len(selected)
@@ -456,7 +482,23 @@ class VectorIndexes:
             return None
         available = snapshot.count if selected is None else len(selected)
         nearest = None
-        if self.kernel.search_f32 is not None:
+        positions = exact = None
+        if self.kernel.search_f32_exact is not None:
+            requested = min(keep + 1, available)
+            candidates, candidate_distances, exact_candidates = (
+                self.kernel.topk_f32_exact(snapshot, expression[2], selected, requested))
+            if requested >= available:
+                positions = candidates
+            else:
+                dimensions = snapshot.dimensions
+                error = min(0.25, (dimensions + 1) * F32_ROUNDING)
+                slack = (dimensions + 1) * F32_SUBNORMAL
+                threshold = candidate_distances[keep - 1]
+                if candidate_distances[-1] > threshold * (1.0 + 4.0 * error) + 4.0 * slack:
+                    positions = candidates[:keep]
+            if positions is not None:
+                exact = exact_candidates[:len(positions)]
+        elif self.kernel.search_f32 is not None:
             # Float32 selection is a candidate filter, not the answer. The
             # margin below proves that no row outside the returned set can
             # enter the exact top `keep`; otherwise fall back to the exact
@@ -473,15 +515,16 @@ class VectorIndexes:
                 threshold = candidates[keep - 1][1]
                 if candidates[-1][1] > threshold * (1.0 + 4.0 * error) + 4.0 * slack:
                     nearest = candidates[:keep]
-        if nearest is None:
+        if positions is None and nearest is None:
             nearest = self.kernel.topk(snapshot, expression[2], selected, keep)
         self.searches += 1
         verified = []
-        # One native call re-evaluates every candidate in double precision; the
-        # generic executor uses the same loop, so both paths agree bit for bit.
-        candidates = array('Q', [position for position, _ in nearest])
-        exact = native_distances(self.kernel.address(snapshot.vectors), expression[2], candidates)
-        for index, (position, _) in enumerate(nearest):
+        if positions is None:
+            # Older native libraries need the separate exact-distance call.
+            positions = array('Q', [position for position, _ in nearest])
+            exact = native_distances(
+                self.kernel.address(snapshot.vectors), expression[2], positions)
+        for index, position in enumerate(positions):
             key = snapshot.key(position)
             if key in deleted:
                 continue

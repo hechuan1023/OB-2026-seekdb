@@ -371,6 +371,29 @@ MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t mv_topk_f32(
                                  selection, selected, keep, positions, distances);
 }
 
+// Candidate selection plus exact verification in one C call. The float32
+// distances remain available for Python's conservative boundary check; the
+// third output contains the same ordered-double distances as
+// mv_exact_distances, avoiding a second ctypes call for the selected rows.
+MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t
+mv_topk_f32_exact(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t rows, std::uint64_t dimensions,
+    const float *__restrict query, const std::uint64_t *__restrict selection,
+    std::uint64_t selected, std::uint64_t keep,
+    std::uint64_t *__restrict positions, double *__restrict distances,
+    double *__restrict exact_distances) noexcept {
+  if (!exact_distances) return -1;
+  const std::int64_t count =
+      mv_topk_f32(vectors, keys, rows, dimensions, query, selection, selected,
+                  keep, positions, distances);
+  if (count < 0) return count;
+  for (std::int64_t i = 0; i < count; ++i)
+    exact_distances[i] =
+        exact_distance(vectors + positions[i] * dimensions, query, dimensions);
+  return count;
+}
+
 MV_EXPORT int mv_has_fma() {
   return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma");
 }

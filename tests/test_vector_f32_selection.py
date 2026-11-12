@@ -9,8 +9,10 @@ import random
 import struct
 import tempfile
 import unittest
+from array import array
 
 from minivectordb.engine import Engine
+from minivectordb.native import distances as native_distances
 
 
 def f32(value):
@@ -193,6 +195,34 @@ class Float32SelectionTests(unittest.TestCase):
         truth = sorted(((key, math.dist([f32(1.0 + key * 1e-7), f32(0.0)], [1.0, 0.0]))
                         for key in range(100)), key=lambda item: (item[1], item[0]))[:10]
         self.assert_rows(rows, truth)
+
+    def test_combined_selection_returns_separate_exact_distances(self):
+        values = self.build(8, 400)
+        snapshot = self.db.vector_indexes.ensure(self.db.table('t'))
+        kernel = self.db.vector_indexes.kernel
+        if kernel.search_f32_exact is None:
+            self.skipTest('combined native kernel not available')
+        query = array('f', [0.25, -0.5, 0.75, 0.125, -0.25, 0.5, -0.75, 0.0])
+        selected = self.db.vector_indexes.selection(
+            self.db.table('t'), snapshot, [(1, '=', 'g0')], self.db.matches)
+        positions, selection_distances, combined_exact = kernel.topk_f32_exact(
+            snapshot, query, selected, 12)
+        old = kernel.topk_f32(snapshot, query, selected, 12)
+        self.assertEqual(list(positions), [position for position, _ in old])
+        self.assertEqual(list(selection_distances), [distance for _, distance in old])
+        separate_exact = native_distances(
+            kernel.address(snapshot.vectors), query, positions)
+        self.assertEqual(list(combined_exact), list(separate_exact))
+        expected = sorted(
+            ((math.dist(values[key], query), key) for key in range(0, 400, 3)),
+            key=lambda item: (item[0], item[1]))[:12]
+        actual_keys = [
+            key for _, key in sorted(
+                ((distance, snapshot.key(position))
+                 for position, distance in zip(positions, combined_exact)),
+                key=lambda item: (item[0], item[1]))
+        ]
+        self.assertEqual(actual_keys, [key for _, key in expected])
 
 
 if __name__ == '__main__':
