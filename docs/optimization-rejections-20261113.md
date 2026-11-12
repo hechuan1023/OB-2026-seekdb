@@ -45,6 +45,15 @@ median paired ratio of 1.0440. The 4096-slot candidate was faster in only 1/7
 pairs; cgroup peak memory was effectively unchanged. The experiment was
 discarded and the 1024-slot default retained.
 
+## Stack candidate buffer for small OpenMP K
+
+The OpenMP exact kernel was changed to use a fixed 32-candidate stack buffer for
+`K <= 32` instead of allocating small vectors per query. Seven alternating
+direct-kernel pairs measured 0.109294 s versus 0.109003 s in total, but the
+per-query median was 80.80 µs versus 87.11 µs and the candidate won only 3/7
+pairs. The fixed-buffer path was therefore discarded; the allocation-light
+micro-optimization did not survive the real kernel path.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
