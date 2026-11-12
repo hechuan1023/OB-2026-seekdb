@@ -65,6 +65,15 @@ candidate. The candidate won only 2/7 pairs and the median paired ratio was
 1.0036, a 0.36% regression. The change was reverted because the encoder gain was
 too small relative to commit `fsync` and host noise.
 
+## Four-row lookahead prefetch for filtered scans
+
+The filtered OpenMP scanner prefetched the vector four selected rows ahead.
+Seven alternating direct-kernel rounds at 768 selected rows measured a 0.8721
+median ratio but only 4/7 rounds were faster; at 2,000 selected rows the median
+ratio was 1.0416 and only 3/7 rounds were faster. The inconsistent direction
+showed that the apparent small-filter gain did not survive the larger working
+set, so the prefetch was reverted.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
