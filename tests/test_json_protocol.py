@@ -4,8 +4,20 @@ import sys
 import tempfile
 import unittest
 
+from minivectordb.json_protocol import _parse_fast_execute
+
 
 class JsonProtocolTests(unittest.TestCase):
+    def test_fast_execute_parser_only_accepts_canonical_requests(self):
+        line = ('{"id":17,"op":"execute","sql":"SELECT id FROM t WHERE id=1",'
+                '"search_mode":"exact"}')
+        self.assertEqual(_parse_fast_execute(line),
+                         (17, 'SELECT id FROM t WHERE id=1', 'exact'))
+        self.assertIsNone(_parse_fast_execute(' ' + line))
+        self.assertIsNone(_parse_fast_execute(line.replace('"id":17', '"id":"17"')))
+        self.assertIsNone(_parse_fast_execute(line.replace('WHERE id=1', 'WHERE id=\\\\1')))
+        self.assertIsNone(_parse_fast_execute(line.replace('"exact"', '"other"')))
+
     def test_requests_transactions_modes_and_shutdown(self):
         with tempfile.TemporaryDirectory() as directory:
             p = subprocess.Popen([sys.executable, '-m', 'minivectordb', '--wire', 'jsonl',

@@ -28,12 +28,11 @@ MEMORY_SNAPSHOT_LIMIT = 8 * 1024 * 1024
 # indices stay aligned with snapshot positions.
 DELETED = object()
 
-# Float32 candidate selection is only trusted when the (keep+margin)-th
+# Float32 candidate selection is only trusted when the (keep+1)-th
 # squared distance is clearly larger than the keep-th. The per-dimension
 # coefficient is twice the float32 unit roundoff (subtraction and product each
 # round once); the absolute term covers subnormal underflow. The observed
 # random-data boundary ratio for 128 dimensions is above 1.01.
-F32_MARGIN = 16
 F32_ROUNDING = 2.4e-7
 F32_SUBNORMAL = 6e-45
 
@@ -463,7 +462,7 @@ class VectorIndexes:
             # enter the exact top `keep`; otherwise fall back to the exact
             # double kernel. Only candidates inside the uncertainty band of
             # the keep-th squared distance need exact re-evaluation.
-            requested = min(keep + F32_MARGIN, available)
+            requested = min(keep + 1, available)
             candidates = self.kernel.topk_f32(snapshot, expression[2], selected, requested)
             if requested >= available:
                 nearest = candidates  # Every row was already a candidate.
@@ -473,11 +472,7 @@ class VectorIndexes:
                 slack = (dimensions + 1) * F32_SUBNORMAL
                 threshold = candidates[keep - 1][1]
                 if candidates[-1][1] > threshold * (1.0 + 4.0 * error) + 4.0 * slack:
-                    bound = threshold * (1.0 + 2.0 * error) + 2.0 * slack
-                    count = keep
-                    while count < len(candidates) and candidates[count][1] <= bound:
-                        count += 1
-                    nearest = candidates[:count]
+                    nearest = candidates[:keep]
         if nearest is None:
             nearest = self.kernel.topk(snapshot, expression[2], selected, keep)
         self.searches += 1
