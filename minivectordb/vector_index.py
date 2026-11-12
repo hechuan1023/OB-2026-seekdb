@@ -95,6 +95,10 @@ class Snapshot:
         self.dimensions = schema['columns'][column][2]
         self.paths = [storage.directory / f'flat-{schema["id"]}.{extension}' for extension in ('vec', 'keys')]
         self.vectors = self.keys = None
+        # Lazily created cast views: re-evaluating a candidate then costs one
+        # slice instead of building three memoryview objects per row.
+        self._flat = None
+        self._key_view = None
         self.count = 0
         self.deleted = set()
         vectors, keys = bytearray(), bytearray()
@@ -142,12 +146,24 @@ class Snapshot:
     def difference_update(self, keys):
         self.deleted.difference_update(keys)
 
+    def _views(self):
+        if self._flat is None:
+            self._flat = memoryview(self.vectors).cast('f')
+            # Big-endian hosts keep the portable struct path for keys.
+            self._key_view = (memoryview(self.keys).cast('q')
+                              if sys.byteorder == 'little' else None)
+        return self._flat
+
     def key(self, position):
+        self._views()
+        if self._key_view is not None:
+            return self._key_view[position]
         return KEY.unpack_from(self.keys, position * KEY.size)[0]
 
     def vector(self, position):
-        start = position * self.dimensions * 4
-        return memoryview(self.vectors)[start:start + self.dimensions * 4].cast('f')
+        flat = self._views()
+        start = position * self.dimensions
+        return flat[start:start + self.dimensions]
 
     def patch(self, rows, column):
         """Overwrite the vectors of updated rows without rebuilding the snapshot.
@@ -168,6 +184,11 @@ class Snapshot:
                 self.vectors[start:start + width] = row[column].tobytes()
 
     def close(self):
+        # Release exported views before closing a mapped file.
+        for view in (self._flat, self._key_view):
+            if view is not None:
+                view.release()
+        self._flat = self._key_view = None
         for mapping in (self.vectors, self.keys):
             if isinstance(mapping, mmap.mmap):
                 mapping.close()
