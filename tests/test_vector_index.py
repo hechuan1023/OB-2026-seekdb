@@ -443,6 +443,9 @@ class NativeParserTests(unittest.TestCase):
         self.assertEqual(
             self.parse_vectors(texts, 2),
             [self.parse_vector(text, 2) for text in texts])
+        parsed = self.parse_vectors(texts, 2)
+        parsed[0][0] = 9.0
+        self.assertEqual(parsed[1], self.parse_vector(texts[1], 2))
         self.assertIsNone(self.parse_vectors(['[0,1]', '[01,2]'], 2))
 
 

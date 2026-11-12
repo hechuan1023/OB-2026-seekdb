@@ -112,5 +112,7 @@ def parse_vectors(texts, size):
                               flat.buffer_info()[0])
     if returned != len(encoded):
         return None
-    return [array('f', flat[start:start + size])
+    # array slicing already returns an independent array('f'); wrapping each
+    # slice in another array copies the same vector a second time.
+    return [flat[start:start + size]
             for start in range(0, len(flat), size)]

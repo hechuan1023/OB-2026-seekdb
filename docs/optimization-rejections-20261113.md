@@ -162,6 +162,21 @@ queries were 1.094276; only 2/7 total pairs were faster and peak memory was
 regressed the full path. Both source changes were reverted. The existing
 float32 candidate selection remains the exact-mode implementation.
 
+## Single-probe duplicate insert
+
+The insert path normally probes the transaction overlay and the committed
+primary index before appending a row, then probes the overlay again while
+updating it. A prototype removed the explicit duplicate lookup and tried to use
+the previous value returned by the append itself.
+
+This was incorrect because the overlay contains only changes made by the active
+transaction. A key present only in the committed index therefore appeared new
+to the overlay. The public `transaction_failed_insert` case returned
+`affected_rows=2` instead of `CONSTRAINT_ERROR`, and the new transaction
+continuation test exposed the same flaw. The prototype was reverted without
+performance testing. Any future single-probe design must check both the overlay
+and committed index before reusing an empty overlay slot.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
