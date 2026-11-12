@@ -37,6 +37,17 @@ F32_ROUNDING = 2.4e-7
 F32_SUBNORMAL = 6e-45
 
 
+def _cpu_limit():
+    """Return the usable CPU count, capped for the small exact scan."""
+    try:
+        quota, period = Path('/sys/fs/cgroup/cpu.max').read_text().split()
+        if quota == 'max':
+            return 1
+        return max(1, min(4, int(quota) // int(period)))
+    except (OSError, ValueError):
+        return 1
+
+
 class SnapshotFilterCollector:
     """Build bounded equality-position groups during the Snapshot row scan.
 
@@ -103,12 +114,16 @@ class NativeKernel:
         self.search = self.library.mv_topk
         self.search_f32 = None
         self.search_f32_exact = None
+        self.search_f32_exact_omp = None
+        self.search_threads = _cpu_limit()
         try:
             if self.library.mv_has_fma():
                 self.search = self.library.mv_topk_fma
                 # Candidate-only kernel: float32 distances, exact re-check later.
                 self.search_f32 = self.library.mv_topk_f32
                 self.search_f32_exact = getattr(self.library, 'mv_topk_f32_exact', None)
+                self.search_f32_exact_omp = getattr(
+                    self.library, 'mv_topk_f32_exact_omp', None)
         except AttributeError:
             pass  # Older library: keep the portable kernel.
         self.search.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64,
@@ -121,6 +136,11 @@ class NativeKernel:
         if self.search_f32_exact is not None:
             self.search_f32_exact.argtypes = self.search.argtypes + [ctypes.c_void_p]
             self.search_f32_exact.restype = ctypes.c_int64
+        if self.search_f32_exact_omp is not None:
+            self.search_f32_exact_omp.argtypes = (
+                self.search.argtypes[:8] + [ctypes.c_uint64] +
+                self.search.argtypes[8:] + [ctypes.c_void_p])
+            self.search_f32_exact_omp.restype = ctypes.c_int64
 
     @staticmethod
     def address(buffer):
@@ -146,12 +166,21 @@ class NativeKernel:
         positions = array('Q', [0]) * keep
         distances = array('d', [0]) * keep
         exact = array('d', [0]) * keep
-        returned = self.search_f32_exact(
-            self.address(snapshot.vectors), self.address(snapshot.keys),
-            snapshot.count, snapshot.dimensions, query.buffer_info()[0],
-            selected.buffer_info()[0] if selected is not None else None,
-            count, keep, positions.buffer_info()[0], distances.buffer_info()[0],
-            exact.buffer_info()[0])
+        if (selected is None and self.search_f32_exact_omp is not None
+                and self.search_threads > 1 and snapshot.count >= 4096):
+            returned = self.search_f32_exact_omp(
+                self.address(snapshot.vectors), self.address(snapshot.keys),
+                snapshot.count, snapshot.dimensions, query.buffer_info()[0],
+                None, count, keep, self.search_threads,
+                positions.buffer_info()[0], distances.buffer_info()[0],
+                exact.buffer_info()[0])
+        else:
+            returned = self.search_f32_exact(
+                self.address(snapshot.vectors), self.address(snapshot.keys),
+                snapshot.count, snapshot.dimensions, query.buffer_info()[0],
+                selected.buffer_info()[0] if selected is not None else None,
+                count, keep, positions.buffer_info()[0],
+                distances.buffer_info()[0], exact.buffer_info()[0])
         if returned != keep:
             raise RuntimeError('Native exact search failed')
         return positions, distances, exact

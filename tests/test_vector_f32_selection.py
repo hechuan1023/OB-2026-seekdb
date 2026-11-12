@@ -10,6 +10,7 @@ import struct
 import tempfile
 import unittest
 from array import array
+from types import SimpleNamespace
 
 from minivectordb.engine import Engine
 from minivectordb.native import distances as native_distances
@@ -223,6 +224,163 @@ class Float32SelectionTests(unittest.TestCase):
                 key=lambda item: (item[0], item[1]))
         ]
         self.assertEqual(actual_keys, [key for _, key in expected])
+
+    def test_openmp_exact_kernel_matches_single_thread(self):
+        kernel = self.db.vector_indexes.kernel
+        if kernel.search_f32_exact_omp is None:
+            self.skipTest('OpenMP exact kernel not available')
+
+        def run(snapshot, query, keep, threads):
+            positions = array('Q', [0]) * keep
+            distances = array('d', [0.0]) * keep
+            exact = array('d', [0.0]) * keep
+            if threads is None:
+                returned = kernel.search_f32_exact(
+                    kernel.address(snapshot.vectors),
+                    kernel.address(snapshot.keys),
+                    snapshot.count,
+                    snapshot.dimensions,
+                    query.buffer_info()[0],
+                    None,
+                    snapshot.count,
+                    keep,
+                    positions.buffer_info()[0],
+                    distances.buffer_info()[0],
+                    exact.buffer_info()[0],
+                )
+            else:
+                returned = kernel.search_f32_exact_omp(
+                    kernel.address(snapshot.vectors),
+                    kernel.address(snapshot.keys),
+                    snapshot.count,
+                    snapshot.dimensions,
+                    query.buffer_info()[0],
+                    None,
+                    snapshot.count,
+                    keep,
+                    threads,
+                    positions.buffer_info()[0],
+                    distances.buffer_info()[0],
+                    exact.buffer_info()[0],
+                )
+            self.assertEqual(returned, keep)
+            return positions.tolist(), distances.tolist(), exact.tolist()
+
+        rng = random.Random(20261113)
+        for dimensions in (7, 128):
+            with self.subTest(dimensions=dimensions):
+                rows = 4097
+                vectors = array(
+                    'f',
+                    (f32(rng.uniform(-2.0, 2.0))
+                     for _ in range(rows * dimensions)),
+                )
+                snapshot = SimpleNamespace(
+                    vectors=vectors,
+                    keys=array('q', range(rows)),
+                    count=rows,
+                    dimensions=dimensions,
+                )
+                for keep in (1, 10, 11):
+                    with self.subTest(keep=keep):
+                        query = array(
+                            'f',
+                            (f32(rng.uniform(-2.0, 2.0))
+                             for _ in range(dimensions)),
+                        )
+                        self.assertEqual(
+                            run(snapshot, query, keep, 2),
+                            run(snapshot, query, keep, None),
+                        )
+
+    def test_openmp_exact_kernel_preserves_ties_and_fallbacks(self):
+        kernel = self.db.vector_indexes.kernel
+        if kernel.search_f32_exact_omp is None:
+            self.skipTest('OpenMP exact kernel not available')
+
+        def run(snapshot, query, keep, threads):
+            positions = array('Q', [0]) * keep
+            distances = array('d', [0.0]) * keep
+            exact = array('d', [0.0]) * keep
+            returned = kernel.search_f32_exact_omp(
+                kernel.address(snapshot.vectors),
+                kernel.address(snapshot.keys),
+                snapshot.count,
+                snapshot.dimensions,
+                query.buffer_info()[0],
+                None,
+                snapshot.count,
+                keep,
+                threads,
+                positions.buffer_info()[0],
+                distances.buffer_info()[0],
+                exact.buffer_info()[0],
+            )
+            self.assertEqual(returned, keep)
+            return positions.tolist(), distances.tolist(), exact.tolist()
+
+        rows = 4097
+        dimensions = 3
+        snapshot = SimpleNamespace(
+            vectors=array('f', [1.0, 2.0, 3.0]) * rows,
+            keys=array('q', range(rows - 1, -1, -1)),
+            count=rows,
+            dimensions=dimensions,
+        )
+        query = array('f', [1.0, 2.0, 3.0])
+        positions, distances, exact = run(snapshot, query, 10, 2)
+        self.assertEqual(
+            [snapshot.keys[position] for position in positions],
+            list(range(10)),
+        )
+        self.assertEqual(distances, [0.0] * 10)
+        self.assertEqual(exact, [0.0] * 10)
+
+        small = SimpleNamespace(
+            vectors=snapshot.vectors[:dimensions * 32],
+            keys=array('q', range(32)),
+            count=32,
+            dimensions=dimensions,
+        )
+        self.assertEqual(
+            run(small, query, 10, 2),
+            run(small, query, 10, 1),
+        )
+
+    def test_openmp_route_uses_threads_only_without_filter(self):
+        kernel = self.db.vector_indexes.kernel
+        if kernel.search_f32_exact_omp is None:
+            self.skipTest('OpenMP exact kernel not available')
+        rows, dimensions = 4097, 7
+        rng = random.Random(20261114)
+        snapshot = SimpleNamespace(
+            vectors=array(
+                'f',
+                (f32(rng.uniform(-1.0, 1.0))
+                 for _ in range(rows * dimensions)),
+            ),
+            keys=array('q', range(rows)),
+            count=rows,
+            dimensions=dimensions,
+        )
+        query = array(
+            'f',
+            (f32(rng.uniform(-1.0, 1.0)) for _ in range(dimensions)),
+        )
+        selected = array('Q', range(0, rows, 3))
+        old_threads = kernel.search_threads
+        try:
+            kernel.search_threads = 2
+            threaded = kernel.topk_f32_exact(snapshot, query, None, 11)
+            filtered = kernel.topk_f32_exact(snapshot, query, selected, 11)
+            kernel.search_threads = 1
+            sequential = kernel.topk_f32_exact(snapshot, query, None, 11)
+            filtered_sequential = kernel.topk_f32_exact(
+                snapshot, query, selected, 11)
+        finally:
+            kernel.search_threads = old_threads
+        self.assertEqual(threaded, sequential)
+        self.assertEqual(filtered, filtered_sequential)
 
 
 if __name__ == '__main__':

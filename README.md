@@ -57,7 +57,7 @@ docker run --rm -i -v minivectordb-data:/data minivectordb:dev
 
 Dockerfile 用固定 SHA256 digest 的 Python 3.11 Bookworm 镜像进行多阶段构建，编译阶段的 32 项 Debian 包版本记录在 `build-dependencies.lock`。源码编译得到自研 C++ 共享库；编译器和本地预编译文件不进入最终镜像，运行时无需联网。依赖版本下架时构建应失败，不能静默换版；正式允许的镜像和依赖范围仍待确认。
 
-当前版本 Windows 与 Linux 容器完整回归均为 177 项通过；官方检查器针对实际 Docker 入口的握手与 20 组公开用例通过，详见 [JSONL 验证记录](docs/official-jsonl-validation.json)。64 MiB 超内存压力测试通过，`oom_kill` 为 0。当前 `perf/iterative-optimization` 测试分支包含：内核距离归约内联与 FMA 运行时选择、小 K 有序候选收集、TopK JSONL 小结果单次写、规范多行 INSERT 解析快路径、高基数列值缓存与 1.5 MiB 过滤预算、原生向量解析、小数据集内存快照、按 cgroup 限额选择匿名主键索引。本地对照见 [JSONL 输出合并记录](docs/json-output-batching-20261113.md)、[INSERT 快路径记录](docs/insert-fast-path-20261113.md)、[小 K 优化记录](docs/sorted-small-k-20261113.md) 与 [过滤缓存优化记录](docs/jsonl-filter-optimization.md)。正式分支 `2026-competition-round2` 未修改。历史 v4 验证、旧版本的容器压力测试和测量分别见 [v4 验证与复盘](docs/public-v4-validation.md)、[容器验证](docs/docker-validation.md) 与 [优化记录](docs/r3-optimization.md)。这些结果不等于正式准入。
+当前版本 Windows 与 Linux 容器完整回归均为 180 项通过；官方检查器针对实际 Docker 入口的握手与 20 组公开用例通过，详见 [JSONL 验证记录](docs/official-jsonl-validation.json)。64 MiB 超内存压力测试通过，`oom_kill` 为 0。当前 `perf/iterative-optimization` 测试分支包含：内核距离归约内联与 FMA 运行时选择、按 cgroup CPU 配额启用的双线程无过滤 exact TopK、小 K 有序候选收集、TopK JSONL 小结果单次写、规范多行 INSERT 解析快路径、高基数列值缓存与 1.5 MiB 过滤预算、原生向量解析、小数据集内存快照、按 cgroup 限额选择匿名主键索引。本地对照见 [OpenMP 记录](docs/openmp-exact-20261113.md)、[JSONL 输出合并记录](docs/json-output-batching-20261113.md)、[INSERT 快路径记录](docs/insert-fast-path-20261113.md)、[小 K 优化记录](docs/sorted-small-k-20261113.md) 与 [过滤缓存优化记录](docs/jsonl-filter-optimization.md)。正式分支 `2026-competition-round2` 未修改。历史 v4 验证、旧版本的容器压力测试和测量分别见 [v4 验证与复盘](docs/public-v4-validation.md)、[容器验证](docs/docker-validation.md) 与 [优化记录](docs/r3-optimization.md)。这些结果不等于正式准入。
 
 ## 功能状态
 
@@ -70,7 +70,7 @@ Dockerfile 用固定 SHA256 digest 的 Python 3.11 Bookworm 镜像进行多阶�
 | 事务 | 自动提交、BEGIN／COMMIT／ROLLBACK、读自身修改、语句级失败回滚 |
 | 恢复 | 带长度和校验和的提交日志；重建磁盘索引；丢弃不完整尾部 |
 | 大结果 | 流式扫描；有限内存排序和磁盘归并；TopK 剪枝 |
-| 向量索引 | 磁盘连续 float32 数据与主键映射；自研 C++ 精确 TopK；无 ANN 图结构 |
+| 向量索引 | 磁盘连续 float32 数据与主键映射；自研 C++ 精确 TopK；大表无过滤查询按 cgroup CPU 配额并行；无 ANN 图结构 |
 | 协议 | Docker 默认官方 JSONL；本地另保留 TSV 开发适配器 |
 
 不支持的 JOIN、NULL、聚合、子查询、ALTER TABLE、外键、嵌套事务、主键更新等返回错误，不会按其他语句静默执行。

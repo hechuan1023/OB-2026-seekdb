@@ -1,5 +1,7 @@
 # MiniVectorDB 优化与验证记录
 
+2026-11-13 的按 cgroup CPU 配额启用双线程 exact TopK、原生内核同进程 A/B、两组容器内交替对照、宿主侧 JSONL 对照及完整正确性回归见 [openmp-exact-20261113.md](openmp-exact-20261113.md)。
+
 2026-11-13 的过滤 128 维特化、`fdatasync`、WAL 映射复制和两列 JSON 行格式化拒绝实验及判定依据见 [optimization-rejections-20261113.md](optimization-rejections-20261113.md)。
 
 2026-11-13 的 TopK JSONL 小结果单次写、7 对端到端交替对照、64 行分块边界反例和完整资源回归见 [json-output-batching-20261113.md](json-output-batching-20261113.md)。

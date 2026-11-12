@@ -321,6 +321,25 @@ __attribute__((always_inline)) static inline std::int64_t topk_body(
   }
 }
 
+template <auto Distance, std::uint64_t FixedDimensions>
+static inline std::vector<Candidate> topk_scan_range(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t start, std::uint64_t end, std::uint64_t dimensions,
+    const float *__restrict query, std::uint64_t keep) {
+  const std::uint64_t width = FixedDimensions ? FixedDimensions : dimensions;
+  std::vector<Candidate> ranked;
+  ranked.reserve(static_cast<std::size_t>(keep));
+  for (std::uint64_t row = start; row < end; ++row) {
+    const Candidate item{Distance(vectors + row * width, query, width),
+                         keys[row], row};
+    if (ranked.size() == keep && !better(item, ranked.back())) continue;
+    const auto at = std::lower_bound(ranked.begin(), ranked.end(), item, better);
+    ranked.insert(at, item);
+    if (ranked.size() > keep) ranked.pop_back();
+  }
+  return ranked;
+}
+
 // Generic path: a separate function so its code stays out of the specialized
 // wrapper and does not push the hot loop out of the instruction cache.
 template <auto Distance>
@@ -409,6 +428,56 @@ mv_topk_f32_exact(
     exact_distances[i] =
         exact_distance(vectors + positions[i] * dimensions, query, dimensions);
   return count;
+}
+
+MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t
+mv_topk_f32_exact_omp(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t rows, std::uint64_t dimensions,
+    const float *__restrict query, const std::uint64_t *__restrict selection,
+    std::uint64_t selected, std::uint64_t keep, std::uint64_t threads,
+    std::uint64_t *__restrict positions, double *__restrict distances,
+    double *__restrict exact_distances) noexcept {
+  if (selection != nullptr || !threads || threads < 2 || rows < 4096)
+    return mv_topk_f32_exact(vectors, keys, rows, dimensions, query, selection,
+                             selected, keep, positions, distances,
+                             exact_distances);
+  if (!vectors || !keys || !query || !positions || !distances ||
+      !exact_distances || !dimensions || !rows || !keep)
+    return -1;
+  try {
+    threads = std::min<std::uint64_t>(threads, rows);
+    std::vector<std::vector<Candidate>> parts(static_cast<std::size_t>(threads));
+#pragma omp parallel for num_threads(static_cast<int>(threads)) schedule(static, 1)
+    for (std::int64_t part = 0; part < static_cast<std::int64_t>(threads);
+         ++part) {
+      const std::uint64_t start = rows * part / threads;
+      const std::uint64_t end = rows * (part + 1) / threads;
+      if (dimensions == 128) {
+        parts[part] = topk_scan_range<distance_f32, 128>(
+            vectors, keys, start, end, dimensions, query, keep);
+      } else {
+        parts[part] = topk_scan_range<distance_f32, 0>(
+            vectors, keys, start, end, dimensions, query, keep);
+      }
+    }
+    std::vector<Candidate> ranked;
+    ranked.reserve(static_cast<std::size_t>(keep * threads));
+    for (auto &part : parts)
+      ranked.insert(ranked.end(), part.begin(), part.end());
+    std::sort(ranked.begin(), ranked.end(), better);
+    if (ranked.size() > keep) ranked.resize(keep);
+    for (std::size_t i = 0; i < ranked.size(); ++i) {
+      positions[i] = ranked[i].position;
+      distances[i] = ranked[i].distance;
+      exact_distances[i] =
+          exact_distance(vectors + ranked[i].position * dimensions, query,
+                         dimensions);
+    }
+    return static_cast<std::int64_t>(ranked.size());
+  } catch (...) {
+    return -1;
+  }
 }
 
 MV_EXPORT int mv_has_fma() {
