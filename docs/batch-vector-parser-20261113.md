@@ -71,3 +71,19 @@ transaction rollback, restart, and SIGKILL recovery with `oom=0` and
 
 These are local diagnostics, not official T/B/M or E. Hidden workloads and
 formal resource limits remain unverified.
+
+## Cumulative result
+
+A final ten-pair AB/BA run compared the original round start
+`8b2a016a3` with the final candidate after the parser fast path, combined native
+TopK call, and batch vector parsing:
+
+| Metric | Round start | Final candidate | Change |
+|---|---:|---:|---:|
+| Write 10,000 rows | 1.4178 s | 1.3821 s | -2.52% |
+| All 1,000 queries | 0.3761 s | 0.3355 s | -10.80% |
+| 500 filtered queries | 0.1760 s | 0.1496 s | -15.02% |
+| 500 unfiltered queries | 0.2051 s | 0.1858 s | -9.43% |
+
+The AB and BA query medians were -13.03% and -7.44% respectively. This is a
+local end-to-end result; it does not predict the official E ranking.
