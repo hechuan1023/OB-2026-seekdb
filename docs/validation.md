@@ -1,5 +1,7 @@
 # MiniVectorDB 优化与验证记录
 
+2026-11-13 的显式 ANN SQ8 点积候选扫描、同进程内核 A/B、三组多种子 JSONL 端到端 A/B、Recall@10、写入与内存影响见 [sq8-dot-20261113.md](sq8-dot-20261113.md)。
+
 2026-11-13 的 ANN 显式模式、不同随机种子下的 8 对 JSONL 端到端 A/B、Recall@10 和资源对照见 [ann-mode-validation-20261113.md](ann-mode-validation-20261113.md)。
 
 2026-11-13 的批量向量 OpenMP 解析、原生微基准、21 对持久化写入 A/B、完整回归和 64 MiB 超内存验证见 [openmp-vector-parse-20261113.md](openmp-vector-parse-20261113.md)。

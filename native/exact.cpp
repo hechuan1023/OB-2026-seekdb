@@ -584,12 +584,13 @@ struct Sq8Index {
   float minimum;
   float scale;
   std::vector<std::uint8_t> codes;
+  std::vector<std::int32_t> norms;
 };
 
 __attribute__((target("avx2,fma"))) static inline std::int32_t
-sq8_distance(const std::uint8_t *__restrict row,
-             const std::uint8_t *__restrict query,
-             std::uint64_t dimensions) {
+sq8_dot(const std::uint8_t *__restrict row,
+        const std::uint8_t *__restrict query,
+        std::uint64_t dimensions) {
   __m256i total = _mm256_setzero_si256();
   std::uint64_t dimension = 0;
   for (; dimension + 16 <= dimensions; dimension += 16) {
@@ -599,8 +600,7 @@ sq8_distance(const std::uint8_t *__restrict row,
         reinterpret_cast<const __m128i *>(query + dimension));
     const __m256i row16 = _mm256_cvtepu8_epi16(row8);
     const __m256i query16 = _mm256_cvtepu8_epi16(query8);
-    const __m256i delta = _mm256_sub_epi16(row16, query16);
-    total = _mm256_add_epi32(total, _mm256_madd_epi16(delta, delta));
+    total = _mm256_add_epi32(total, _mm256_madd_epi16(row16, query16));
   }
   __m128i sum = _mm_add_epi32(_mm256_castsi256_si128(total),
                               _mm256_extracti128_si256(total, 1));
@@ -608,9 +608,7 @@ sq8_distance(const std::uint8_t *__restrict row,
   sum = _mm_hadd_epi32(sum, sum);
   std::int32_t result = _mm_cvtsi128_si32(sum);
   for (; dimension < dimensions; ++dimension) {
-    const std::int32_t delta =
-        static_cast<std::int32_t>(row[dimension]) - query[dimension];
-    result += delta * delta;
+    result += static_cast<std::int32_t>(row[dimension]) * query[dimension];
   }
   return result;
 }
@@ -649,12 +647,21 @@ MV_EXPORT void *mv_sq8_build(const float *vectors, std::uint64_t rows,
       return nullptr;
     const float scale =
         maximum > minimum ? (maximum - minimum) / 255.0f : 1.0f;
-    auto *index = new Sq8Index{rows, dimensions, minimum, scale, {}};
+    auto *index = new Sq8Index{rows, dimensions, minimum, scale, {}, {}};
     index->codes.resize(rows * dimensions);
-    for (std::uint64_t i = 0; i < rows * dimensions; ++i) {
-      const float quantized = (vectors[i] - minimum) / scale;
-      index->codes[i] = static_cast<std::uint8_t>(
-          std::max(0.0f, std::min(255.0f, std::nearbyint(quantized))));
+    index->norms.resize(rows);
+    for (std::uint64_t row = 0; row < rows; ++row) {
+      std::int32_t norm = 0;
+      for (std::uint64_t dimension = 0; dimension < dimensions; ++dimension) {
+        const std::uint64_t index_offset = row * dimensions + dimension;
+        const float quantized =
+            (vectors[index_offset] - minimum) / scale;
+        const std::uint8_t code = static_cast<std::uint8_t>(
+            std::max(0.0f, std::min(255.0f, std::nearbyint(quantized))));
+        index->codes[index_offset] = code;
+        norm += static_cast<std::int32_t>(code) * code;
+      }
+      index->norms[row] = norm;
     }
     return index;
   } catch (...) {
@@ -678,19 +685,24 @@ MV_EXPORT std::int64_t mv_sq8_search(
     const std::uint64_t count = selection ? selected : rows;
     candidates = std::max(keep, std::min(candidates, count));
     std::vector<std::uint8_t> query_codes(dimensions);
+    std::int32_t query_norm = 0;
     for (std::uint64_t dimension = 0; dimension < dimensions; ++dimension) {
       const float quantized =
           (query[dimension] - index->minimum) / index->scale;
-      query_codes[dimension] = static_cast<std::uint8_t>(
+      const std::uint8_t code = static_cast<std::uint8_t>(
           std::max(0.0f, std::min(255.0f, std::nearbyint(quantized))));
+      query_codes[dimension] = code;
+      query_norm += static_cast<std::int32_t>(code) * code;
     }
     std::priority_queue<std::pair<std::int32_t, std::uint64_t>> nearest;
     for (std::uint64_t n = 0; n < count; ++n) {
       const std::uint64_t row = selection ? selection[n] : n;
       if (row >= rows) return -1;
-      const std::int32_t distance = sq8_distance(
+      const std::int32_t dot = sq8_dot(
           index->codes.data() + row * dimensions, query_codes.data(),
           dimensions);
+      const std::int32_t distance =
+          index->norms[row] + query_norm - 2 * dot;
       if (nearest.size() < candidates) {
         nearest.emplace(distance, row);
       } else if (distance < nearest.top().first) {

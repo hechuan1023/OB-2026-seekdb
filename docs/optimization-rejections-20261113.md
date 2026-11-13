@@ -366,6 +366,64 @@ scan work while retaining exact re-ranking:
 Both prototypes were reverted. They did not meet the required recall threshold
 and therefore could not be considered performance candidates.
 
+## Fixed-spelling SELECT parser
+
+The benchmark's canonical `SELECT id,L2_DISTANCE(...) AS d ... ORDER BY d
+LIMIT ...` statement was recognized with fixed string searches before the
+existing regex parser. The fallback parser and accepted SQL language were
+unchanged. In the container, parsing the canonical statement fell from
+3.65 microseconds to 1.66 microseconds.
+
+Two alternating image runs with different seeds and 1,000 queries per round
+could not reproduce a stable end-to-end gain. The 11-pair paired median
+candidate/baseline query ratios were 0.981930 and 0.999328; the second run had
+the candidate faster in only 6/11 pairs. All IDs and distances matched. The
+source was reverted because the microbenchmark gain was below the full
+JSONL-pipe variance.
+
+## No-semantic-interposition native build
+
+The native library was rebuilt with `-fno-semantic-interposition` to test
+whether GCC could remove avoidable calls in the exact TopK path. A direct
+same-process comparison over 1,000 queries measured candidate/baseline median
+ratios of 0.998029 unfiltered and 0.995432 filtered; the candidate won only
+523/1,000 and 537/1,000 queries.
+
+Two alternating image runs with different seeds and 1,000 queries per round
+did not confirm a stable end-to-end gain. Their paired median total-query
+ratios were 0.994172 and 1.000022; the second run had the candidate faster in
+only 3/7 pairs. All results matched. The compiler flag was reverted because
+the measured change was inside host variance.
+
+## OpenMP processor binding
+
+The container environment was changed to `OMP_PROC_BIND=close` and
+`OMP_PLACES=cores` so the two exact-scan workers would stay on adjacent cores
+instead of being scheduled across the eight CPUs visible inside the Docker
+Desktop cgroup. Three alternating image runs used different seeds and 1,000
+queries per round.
+
+The first two paired median candidate/baseline total-query ratios were 0.963865
+and 0.970876, but a third seed produced 1.009294 and the candidate was faster
+in only 3/7 pairs. The direction was not stable across seeds, so the
+environment change was reverted. The official CPU topology and cpuset are
+unknown, making a host-specific binding policy a poor submission default.
+
+## Cached distance-query plan
+
+For tables with at least 4,096 rows and the benchmark's exact
+`id, L2_DISTANCE(v, ...) AS d` projection, a cached plan bypassed repeated
+column and alias binding. It still delegated filtering, exact TopK,
+verification and fallback to the existing vector index path. Smaller tables
+and every other SQL shape used the original executor.
+
+Two alternating image runs with different seeds and 1,000 queries per round
+produced opposite results. The paired median total-query ratios were 0.975965
+and 1.059155; the second run had the candidate faster in only 3/7 pairs. In a
+separate same-process run the candidate was also slower. All IDs and distances
+matched. The source was reverted because the small Python binding reduction did
+not survive the complete JSONL path.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
@@ -374,5 +432,10 @@ and therefore could not be considered performance candidates.
 - OpenMP exact TopK for large filtered selections: commit `1202d21db`.
 - Self-written SQ8 ANN candidate filtering for benchmark-shaped unfiltered and
   filtered TopK; exact mode and fallback paths remain unchanged.
+- The SQ8 candidate scan now uses precomputed integer row norms and
+  `row_norm + query_norm - 2 * dot(row, query)`. This is exact for the
+  quantized integer codes and avoids the rejected float32 version's
+  floating-point error and per-row norm-load concerns; see
+  `sq8-dot-20261113.md`.
 - Clean-WAL recovery skips the unconditional startup truncate/`fsync`; see
   `clean-wal-recovery-20261113.md`.
