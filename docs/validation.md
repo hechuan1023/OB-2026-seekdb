@@ -1,5 +1,7 @@
 # MiniVectorDB 优化与验证记录
 
+2026-11-13 的固定容量 exact TopK 候选缓冲区、三个种子的原生内核 A/B、17 对 JSONL 端到端对照和完整资源回归见 [fixed-candidates-20261113.md](fixed-candidates-20261113.md)。
+
 2026-11-13 的恢复期行元数据扫描、隔离恢复 A/B、186 项回归、20/20 公开协议和 64 MiB 超内存验证见 [recovery-metadata-20261113.md](recovery-metadata-20261113.md)。
 
 2026-11-13 的 64 维检查点热循环拆分、9 轮内核 A/B、五种子共 35 对 JSONL 端到端 A/B 和完整资源回归见 [split-checkpoint-topk-20261113.md](split-checkpoint-topk-20261113.md)。

@@ -281,7 +281,7 @@ class Float32SelectionTests(unittest.TestCase):
                     count=rows,
                     dimensions=dimensions,
                 )
-                for keep in (1, 10, 11):
+                for keep in (1, 10, 11, 32, 33):
                     with self.subTest(keep=keep):
                         query = array(
                             'f',

@@ -47,6 +47,43 @@ static bool better(const Candidate &a, const Candidate &b) {
   return a.distance < b.distance || (a.distance == b.distance && a.key < b.key);
 }
 
+// Exact TopK normally retains only K+1 candidates. Keeping that small set on
+// the stack avoids a heap allocation and vector bookkeeping for every query.
+// The generic vector path remains available for larger K values.
+template <std::size_t Capacity>
+struct FixedCandidates {
+  Candidate values[Capacity];
+  std::size_t size = 0;
+  std::size_t limit = 0;
+
+  void reset(std::size_t value) {
+    size = 0;
+    limit = std::min(value, Capacity);
+  }
+
+  void offer(const Candidate &item) {
+    if (!limit || (size == limit && !better(item, values[size - 1])))
+      return;
+    std::size_t at = 0;
+    while (at < size && better(values[at], item)) ++at;
+    if (size < limit) ++size;
+    for (std::size_t i = size - 1; i > at; --i)
+      values[i] = values[i - 1];
+    values[at] = item;
+  }
+};
+
+template <std::size_t Capacity>
+static inline std::int64_t write_candidates(
+    const FixedCandidates<Capacity> &ranked, std::uint64_t *positions,
+    double *distances) {
+  for (std::size_t i = 0; i < ranked.size; ++i) {
+    positions[i] = ranked.values[i].position;
+    distances[i] = ranked.values[i].distance;
+  }
+  return static_cast<std::int64_t>(ranked.size);
+}
+
 // Inline the reduction into the cloned mv_topk so each clone compiles it for its
 // own target. Eight fixed lanes keep the summation order independent of the SIMD
 // width, so the default and AVX2 clones stay bitwise identical under
@@ -358,6 +395,22 @@ __attribute__((always_inline)) static inline std::int64_t topk_body(
   const std::uint64_t width = FixedDimensions ? FixedDimensions : dimensions;
   const std::uint64_t count = selection ? selected : rows;
   keep = std::min(keep, count);
+  if (keep <= 32) {
+    FixedCandidates<32> ranked;
+    ranked.reset(static_cast<std::size_t>(keep));
+    for (std::uint64_t n = 0; n < count; ++n) {
+      const std::uint64_t row = selection ? selection[n] : n;
+      if (row >= rows) return -1;
+      const double threshold =
+          ranked.size == ranked.limit
+              ? ranked.values[ranked.size - 1].distance
+              : std::numeric_limits<double>::infinity();
+      ranked.offer(Candidate{
+          Distance(vectors + row * width, query, width, threshold),
+          keys[row], row});
+    }
+    return write_candidates(ranked, positions, distances);
+  }
   try {
     // Keep the candidates in ascending order. The benchmark's K=11 is small,
     // and improvements are rare after the first few rows, so a linear
@@ -418,6 +471,23 @@ static inline std::vector<Candidate> topk_scan_range(
 }
 
 template <auto Distance, std::uint64_t FixedDimensions>
+static inline void topk_scan_range_fixed(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t start, std::uint64_t end, std::uint64_t dimensions,
+    const float *__restrict query, FixedCandidates<32> &ranked) {
+  const std::uint64_t width = FixedDimensions ? FixedDimensions : dimensions;
+  for (std::uint64_t row = start; row < end; ++row) {
+    const double threshold =
+        ranked.size == ranked.limit
+            ? ranked.values[ranked.size - 1].distance
+            : std::numeric_limits<double>::infinity();
+    ranked.offer(Candidate{
+        Distance(vectors + row * width, query, width, threshold),
+        keys[row], row});
+  }
+}
+
+template <auto Distance, std::uint64_t FixedDimensions>
 static inline std::vector<Candidate> topk_scan_selection_range(
     const float *__restrict vectors, const std::int64_t *__restrict keys,
     const std::uint64_t *__restrict selection, std::uint64_t start,
@@ -440,6 +510,25 @@ static inline std::vector<Candidate> topk_scan_selection_range(
     if (ranked.size() > keep) ranked.pop_back();
   }
   return ranked;
+}
+
+template <auto Distance, std::uint64_t FixedDimensions>
+static inline void topk_scan_selection_range_fixed(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    const std::uint64_t *__restrict selection, std::uint64_t start,
+    std::uint64_t end, std::uint64_t dimensions,
+    const float *__restrict query, FixedCandidates<32> &ranked) {
+  const std::uint64_t width = FixedDimensions ? FixedDimensions : dimensions;
+  for (std::uint64_t n = start; n < end; ++n) {
+    const std::uint64_t row = selection[n];
+    const double threshold =
+        ranked.size == ranked.limit
+            ? ranked.values[ranked.size - 1].distance
+            : std::numeric_limits<double>::infinity();
+    ranked.offer(Candidate{
+        Distance(vectors + row * width, query, width, threshold),
+        keys[row], row});
+  }
 }
 
 // Generic path: a separate function so its code stays out of the specialized
@@ -557,6 +646,54 @@ mv_topk_f32_exact_omp(
   try {
     threads = std::min<std::uint64_t>(
         threads, std::min<std::uint64_t>(rows, 4));
+    if (keep <= 32) {
+      FixedCandidates<32> parts[4];
+      for (auto &part : parts) part.reset(static_cast<std::size_t>(keep));
+      if (selection != nullptr) {
+        threads = std::min<std::uint64_t>(threads, selected);
+#pragma omp parallel for num_threads(static_cast<int>(threads)) schedule(static, 1)
+        for (std::int64_t part = 0; part < static_cast<std::int64_t>(threads);
+             ++part) {
+          const std::uint64_t start = selected * part / threads;
+          const std::uint64_t end = selected * (part + 1) / threads;
+          if (dimensions == 128) {
+            topk_scan_selection_range_fixed<distance_f32_bounded, 128>(
+                vectors, keys, selection, start, end, dimensions, query,
+                parts[part]);
+          } else {
+            topk_scan_selection_range_fixed<distance_f32_bounded, 0>(
+                vectors, keys, selection, start, end, dimensions, query,
+                parts[part]);
+          }
+        }
+      } else {
+#pragma omp parallel for num_threads(static_cast<int>(threads)) schedule(static, 1)
+        for (std::int64_t part = 0; part < static_cast<std::int64_t>(threads);
+             ++part) {
+          const std::uint64_t start = rows * part / threads;
+          const std::uint64_t end = rows * (part + 1) / threads;
+          if (dimensions == 128) {
+            topk_scan_range_fixed<distance_f32_bounded, 128>(
+                vectors, keys, start, end, dimensions, query, parts[part]);
+          } else {
+            topk_scan_range_fixed<distance_f32_bounded, 0>(
+                vectors, keys, start, end, dimensions, query, parts[part]);
+          }
+        }
+      }
+      FixedCandidates<32> ranked;
+      ranked.reset(static_cast<std::size_t>(keep));
+      for (const auto &part : parts)
+        for (std::size_t i = 0; i < part.size; ++i) ranked.offer(part.values[i]);
+      for (std::size_t i = 0; i < ranked.size; ++i) {
+        positions[i] = ranked.values[i].position;
+        distances[i] = ranked.values[i].distance;
+        exact_distances[i] =
+            exact_distance(vectors + ranked.values[i].position * dimensions,
+                           query, dimensions);
+      }
+      return static_cast<std::int64_t>(ranked.size);
+    }
     if (selection != nullptr) {
       threads = std::min<std::uint64_t>(threads, selected);
       std::vector<std::vector<Candidate>> parts(
