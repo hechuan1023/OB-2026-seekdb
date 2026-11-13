@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <queue>
 #include <vector>
 
@@ -72,6 +73,12 @@ static inline double distance_squared(const float *__restrict v,
   return acc[0] + acc[1] + acc[2] + acc[3] + acc[4] + acc[5] + acc[6] + acc[7];
 }
 
+static inline double distance_squared_bounded(
+    const float *__restrict v, const float *__restrict query,
+    std::uint64_t dimensions, double) {
+  return distance_squared(v, query, dimensions);
+}
+
 #if defined(__x86_64__) || defined(__i386__)
 // Single-precision reduction used only to *select* candidates. The caller
 // re-evaluates the selected rows in double precision and falls back to the
@@ -79,8 +86,9 @@ static inline double distance_squared(const float *__restrict v,
 // kept set (see vector_index.py). Eight lanes per accumulator keep the
 // summation order fixed and let one AVX2 register hold eight dimensions.
 __attribute__((target("avx2,fma"))) static inline float
-distance_f32(const float *__restrict v, const float *__restrict query,
-             std::uint64_t dimensions) {
+distance_f32_bounded(const float *__restrict v,
+                     const float *__restrict query,
+                     std::uint64_t dimensions, double threshold) {
   __m256 a0 = _mm256_setzero_ps(), a1 = _mm256_setzero_ps();
   std::uint64_t j = 0;
   for (; j + 16 <= dimensions; j += 16) {
@@ -88,6 +96,21 @@ distance_f32(const float *__restrict v, const float *__restrict query,
     const __m256 d1 = _mm256_sub_ps(_mm256_loadu_ps(v + j + 8), _mm256_loadu_ps(query + j + 8));
     a0 = _mm256_fmadd_ps(d0, d0, a0);
     a1 = _mm256_fmadd_ps(d1, d1, a1);
+    // All terms are non-negative. Once a conservative lower bound on the
+    // partial sum exceeds the current K-th candidate, this row cannot enter
+    // the candidate set. The 0.1% margin is much larger than the accumulated
+    // float32 error and preserves the existing exact re-check boundary.
+    if (threshold < 1e300 && j == 64) {
+      const __m256 running = _mm256_add_ps(a0, a1);
+      const __m128 lo = _mm256_castps256_ps128(running);
+      const __m128 hi = _mm256_extractf128_ps(running, 1);
+      __m128 pair = _mm_add_ps(lo, hi);
+      pair = _mm_hadd_ps(pair, pair);
+      pair = _mm_hadd_ps(pair, pair);
+      const float partial = _mm_cvtss_f32(pair);
+      if (partial > static_cast<float>(threshold) * 1.001f + 1e-30f)
+        return partial;
+    }
   }
   for (; j + 8 <= dimensions; j += 8) {
     const __m256 d = _mm256_sub_ps(_mm256_loadu_ps(v + j), _mm256_loadu_ps(query + j));
@@ -134,6 +157,12 @@ distance_fma(const float *__restrict v, const float *__restrict query,
     sum += delta * delta;
   }
   return sum;
+}
+
+static inline double distance_fma_bounded(
+    const float *__restrict v, const float *__restrict query,
+    std::uint64_t dimensions, double) {
+  return distance_fma(v, query, dimensions);
 }
 #endif
 
@@ -333,7 +362,11 @@ __attribute__((always_inline)) static inline std::int64_t topk_body(
       // Squared distance: monotone in the true distance, so ordering and ties
       // are unchanged. Python re-evaluates the selected rows with math.dist and
       // its boundary guard only needs a monotone key.
-      const Candidate item{Distance(vectors + row * width, query, width),
+      const double threshold =
+          ranked.size() == keep ? ranked.back().distance
+                                : std::numeric_limits<double>::infinity();
+      const Candidate item{Distance(vectors + row * width, query, width,
+                                    threshold),
                            keys[row], row};
       if (ranked.size() == keep && !better(item, ranked.back()))
         continue;
@@ -362,7 +395,11 @@ static inline std::vector<Candidate> topk_scan_range(
   std::vector<Candidate> ranked;
   ranked.reserve(static_cast<std::size_t>(keep));
   for (std::uint64_t row = start; row < end; ++row) {
-    const Candidate item{Distance(vectors + row * width, query, width),
+    const double threshold =
+        ranked.size() == keep ? ranked.back().distance
+                              : std::numeric_limits<double>::infinity();
+    const Candidate item{Distance(vectors + row * width, query, width,
+                                  threshold),
                          keys[row], row};
     if (ranked.size() == keep && !better(item, ranked.back())) continue;
     const auto at = std::lower_bound(ranked.begin(), ranked.end(), item, better);
@@ -383,7 +420,11 @@ static inline std::vector<Candidate> topk_scan_selection_range(
   ranked.reserve(static_cast<std::size_t>(keep));
   for (std::uint64_t n = start; n < end; ++n) {
     const std::uint64_t row = selection[n];
-    const Candidate item{Distance(vectors + row * width, query, width),
+    const double threshold =
+        ranked.size() == keep ? ranked.back().distance
+                              : std::numeric_limits<double>::infinity();
+    const Candidate item{Distance(vectors + row * width, query, width,
+                                  threshold),
                          keys[row], row};
     if (ranked.size() == keep && !better(item, ranked.back())) continue;
     const auto at = std::lower_bound(ranked.begin(), ranked.end(), item, better);
@@ -426,8 +467,9 @@ MV_EXPORT MV_TARGET_CLONES std::int64_t mv_topk(
     const float *__restrict query, const std::uint64_t *__restrict selection,
     std::uint64_t selected, std::uint64_t keep,
     std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
-  return topk_impl<distance_squared>(vectors, keys, rows, dimensions, query,
-                                     selection, selected, keep, positions, distances);
+  return topk_impl<distance_squared_bounded>(
+      vectors, keys, rows, dimensions, query, selection, selected, keep,
+      positions, distances);
 }
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -438,10 +480,12 @@ MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t mv_topk_fma(
     std::uint64_t selected, std::uint64_t keep,
     std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
   if (dimensions == 128 && selection == nullptr)
-    return topk_impl_128<distance_fma>(vectors, keys, rows, dimensions, query,
-                                       selection, selected, keep, positions, distances);
-  return topk_impl<distance_fma>(vectors, keys, rows, dimensions, query,
-                                 selection, selected, keep, positions, distances);
+    return topk_impl_128<distance_fma_bounded>(
+        vectors, keys, rows, dimensions, query, selection, selected, keep,
+        positions, distances);
+  return topk_impl<distance_fma_bounded>(
+      vectors, keys, rows, dimensions, query, selection, selected, keep,
+      positions, distances);
 }
 
 // Candidate-selection kernel: float32 distances, same heap and tie-break.
@@ -454,10 +498,12 @@ MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t mv_topk_f32(
     std::uint64_t selected, std::uint64_t keep,
     std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
   if (dimensions == 128 && selection == nullptr)
-    return topk_impl_128<distance_f32>(vectors, keys, rows, dimensions, query,
-                                       selection, selected, keep, positions, distances);
-  return topk_impl<distance_f32>(vectors, keys, rows, dimensions, query,
-                                 selection, selected, keep, positions, distances);
+    return topk_impl_128<distance_f32_bounded>(
+        vectors, keys, rows, dimensions, query, selection, selected, keep,
+        positions, distances);
+  return topk_impl<distance_f32_bounded>(
+      vectors, keys, rows, dimensions, query, selection, selected, keep,
+      positions, distances);
 }
 
 // Candidate selection plus exact verification in one C call. The float32
@@ -513,10 +559,10 @@ mv_topk_f32_exact_omp(
         const std::uint64_t start = selected * part / threads;
         const std::uint64_t end = selected * (part + 1) / threads;
         if (dimensions == 128) {
-          parts[part] = topk_scan_selection_range<distance_f32, 128>(
+          parts[part] = topk_scan_selection_range<distance_f32_bounded, 128>(
               vectors, keys, selection, start, end, dimensions, query, keep);
         } else {
-          parts[part] = topk_scan_selection_range<distance_f32, 0>(
+          parts[part] = topk_scan_selection_range<distance_f32_bounded, 0>(
               vectors, keys, selection, start, end, dimensions, query, keep);
         }
       }
@@ -542,10 +588,10 @@ mv_topk_f32_exact_omp(
       const std::uint64_t start = rows * part / threads;
       const std::uint64_t end = rows * (part + 1) / threads;
       if (dimensions == 128) {
-        parts[part] = topk_scan_range<distance_f32, 128>(
+        parts[part] = topk_scan_range<distance_f32_bounded, 128>(
             vectors, keys, start, end, dimensions, query, keep);
       } else {
-        parts[part] = topk_scan_range<distance_f32, 0>(
+        parts[part] = topk_scan_range<distance_f32_bounded, 0>(
             vectors, keys, start, end, dimensions, query, keep);
       }
     }
@@ -718,11 +764,11 @@ MV_EXPORT std::int64_t mv_sq8_search(
     }
     std::vector<Candidate> ranked;
     if (dimensions == 128) {
-      ranked = topk_scan_selection_range<distance_f32, 128>(
+      ranked = topk_scan_selection_range<distance_f32_bounded, 128>(
           vectors, keys, selected.data(), 0, selected.size(), dimensions,
           query, keep);
     } else {
-      ranked = topk_scan_selection_range<distance_f32, 0>(
+      ranked = topk_scan_selection_range<distance_f32_bounded, 0>(
           vectors, keys, selected.data(), 0, selected.size(), dimensions,
           query, keep);
     }

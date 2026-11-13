@@ -424,8 +424,28 @@ separate same-process run the candidate was also slower. All IDs and distances
 matched. The source was reverted because the small Python binding reduction did
 not survive the complete JSONL path.
 
+## Partial-dimension exact TopK checkpoints
+
+The exact float32 candidate scan was first changed to test a conservative
+partial-distance lower bound after 32, 64, and 96 dimensions. The full JSONL
+path produced a paired candidate/baseline median ratio of 1.018692, so the
+extra branches and threshold loads outweighed the pruning work and the variant
+was reverted.
+
+A single checkpoint after 64 dimensions was retained. Once the candidate set
+is full, a row is abandoned only when its non-negative partial squared distance
+exceeds the current K-th squared distance by 0.1% plus a small absolute margin.
+Rows near the boundary receive the full scan, and the existing float32 exact
+kernel and ordered-double verification still determine the returned results.
+Across three seeds and seven alternating end-to-end pairs per seed, all 21
+result sets matched and the median of run-median candidate/baseline total-query
+ratios was 0.989624; physical I/O was unchanged and peak-memory ratios were
+approximately 1.0001 to 1.0007. See `partial-bound-exact-20261113.md`.
+
 ## Retained changes
 
+- The 128-dimension exact TopK candidate scan uses one conservative 64-dimension
+  partial-distance checkpoint; see `partial-bound-exact-20261113.md`.
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
 - TopK JSONL small-result single write: commit `630daca84`.
 - Cgroup-aware OpenMP exact TopK for large unfiltered scans: commit `c9a79d8e4`.

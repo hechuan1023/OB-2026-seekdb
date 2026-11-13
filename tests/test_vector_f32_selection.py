@@ -293,6 +293,40 @@ class Float32SelectionTests(unittest.TestCase):
                             run(snapshot, query, keep, None),
                         )
 
+    def test_bounded_partial_scan_matches_exact_at_128_dimensions(self):
+        """Exercise the partial-sum cutoff against the unbounded exact kernel."""
+        kernel = self.db.vector_indexes.kernel
+        if kernel.search_f32_exact is None:
+            self.skipTest('combined native kernel not available')
+        rows, dimensions, keep = 10_000, 128, 11
+        rng = random.Random(20261116)
+        snapshot = SimpleNamespace(
+            vectors=array(
+                'f',
+                (f32(rng.uniform(-1.0, 1.0))
+                 for _ in range(rows * dimensions)),
+            ),
+            keys=array('q', range(rows)),
+            count=rows,
+            dimensions=dimensions,
+        )
+        selected = array('Q', range(0, rows, 5))
+        for index in range(16):
+            query = array(
+                'f',
+                (f32(rng.uniform(-1.0, 1.0)) for _ in range(dimensions)),
+            )
+            for selection in (None, selected):
+                bounded = kernel.topk_f32_exact(
+                    snapshot, query, selection, keep)
+                exact = kernel.topk(snapshot, query, selection, keep)
+                self.assertEqual(list(bounded[0]), [position for position, _ in exact])
+                for actual, (_, squared) in zip(bounded[2], exact):
+                    self.assertTrue(math.isclose(
+                        actual, math.sqrt(squared),
+                        rel_tol=1e-12, abs_tol=1e-12,
+                    ))
+
     def test_openmp_exact_kernel_preserves_ties_and_fallbacks(self):
         kernel = self.db.vector_indexes.kernel
         if kernel.search_f32_exact_omp is None:
