@@ -460,6 +460,11 @@ was reverted and the experiment is recorded here.
 
 ## Retained changes
 
+- The 64-dimension exact TopK partial-distance checkpoint is split out of the
+  AVX2/FMA hot loop. Across five seeds and 35 alternating end-to-end pairs, all
+  results matched, every run-median total-query ratio was below 1, and the
+  median of those ratios was 0.984013; see
+  `split-checkpoint-topk-20261113.md`.
 - The 128-dimension exact TopK candidate scan uses one conservative 64-dimension
   partial-distance checkpoint; see `partial-bound-exact-20261113.md`.
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.

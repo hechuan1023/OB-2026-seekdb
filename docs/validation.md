@@ -1,5 +1,7 @@
 # MiniVectorDB 优化与验证记录
 
+2026-11-13 的 64 维检查点热循环拆分、9 轮内核 A/B、五种子共 35 对 JSONL 端到端 A/B 和完整资源回归见 [split-checkpoint-topk-20261113.md](split-checkpoint-topk-20261113.md)。
+
 2026-11-13 的 128 维有界 exact TopK 候选扫描、被拒绝的多检查点版本、三组多种子 JSONL 端到端 A/B、差分测试和 64 MiB 生命周期验证见 [partial-bound-exact-20261113.md](partial-bound-exact-20261113.md)。
 
 2026-11-13 的显式 ANN SQ8 点积候选扫描、同进程内核 A/B、三组多种子 JSONL 端到端 A/B、Recall@10、写入与内存影响见 [sq8-dot-20261113.md](sq8-dot-20261113.md)。

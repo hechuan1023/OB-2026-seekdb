@@ -91,26 +91,34 @@ distance_f32_bounded(const float *__restrict v,
                      std::uint64_t dimensions, double threshold) {
   __m256 a0 = _mm256_setzero_ps(), a1 = _mm256_setzero_ps();
   std::uint64_t j = 0;
+  const std::uint64_t checkpoint =
+      std::min<std::uint64_t>(dimensions & ~std::uint64_t{15}, 64);
+  for (; j < checkpoint; j += 16) {
+    const __m256 d0 = _mm256_sub_ps(_mm256_loadu_ps(v + j), _mm256_loadu_ps(query + j));
+    const __m256 d1 = _mm256_sub_ps(_mm256_loadu_ps(v + j + 8), _mm256_loadu_ps(query + j + 8));
+    a0 = _mm256_fmadd_ps(d0, d0, a0);
+    a1 = _mm256_fmadd_ps(d1, d1, a1);
+  }
+  // All terms are non-negative. Once a conservative lower bound on the
+  // partial sum exceeds the current K-th candidate, this row cannot enter the
+  // candidate set. The 0.1% margin is much larger than the accumulated float32
+  // error and preserves the existing exact re-check boundary.
+  if (j == 64 && threshold < 1e300) {
+    const __m256 running = _mm256_add_ps(a0, a1);
+    const __m128 lo = _mm256_castps256_ps128(running);
+    const __m128 hi = _mm256_extractf128_ps(running, 1);
+    __m128 pair = _mm_add_ps(lo, hi);
+    pair = _mm_hadd_ps(pair, pair);
+    pair = _mm_hadd_ps(pair, pair);
+    const float partial = _mm_cvtss_f32(pair);
+    if (partial > static_cast<float>(threshold) * 1.001f + 1e-30f)
+      return partial;
+  }
   for (; j + 16 <= dimensions; j += 16) {
     const __m256 d0 = _mm256_sub_ps(_mm256_loadu_ps(v + j), _mm256_loadu_ps(query + j));
     const __m256 d1 = _mm256_sub_ps(_mm256_loadu_ps(v + j + 8), _mm256_loadu_ps(query + j + 8));
     a0 = _mm256_fmadd_ps(d0, d0, a0);
     a1 = _mm256_fmadd_ps(d1, d1, a1);
-    // All terms are non-negative. Once a conservative lower bound on the
-    // partial sum exceeds the current K-th candidate, this row cannot enter
-    // the candidate set. The 0.1% margin is much larger than the accumulated
-    // float32 error and preserves the existing exact re-check boundary.
-    if (threshold < 1e300 && j == 64) {
-      const __m256 running = _mm256_add_ps(a0, a1);
-      const __m128 lo = _mm256_castps256_ps128(running);
-      const __m128 hi = _mm256_extractf128_ps(running, 1);
-      __m128 pair = _mm_add_ps(lo, hi);
-      pair = _mm_hadd_ps(pair, pair);
-      pair = _mm_hadd_ps(pair, pair);
-      const float partial = _mm_cvtss_f32(pair);
-      if (partial > static_cast<float>(threshold) * 1.001f + 1e-30f)
-        return partial;
-    }
   }
   for (; j + 8 <= dimensions; j += 8) {
     const __m256 d = _mm256_sub_ps(_mm256_loadu_ps(v + j), _mm256_loadu_ps(query + j));
