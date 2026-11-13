@@ -304,6 +304,68 @@ run. Median cgroup peak memory was 1.30% lower and the candidate was lower in
 the primary write metric had no stable improvement. The source and test were
 reverted.
 
+## Binary protocol transport
+
+The JSONL transport was replaced with an equivalent binary stream to test
+whether text encoding and decoding dominated the end-to-end query path. The
+binary candidate was slower in every alternating pair. It was reverted because
+the protocol did not provide a stable gain and would add an unnecessary
+compatibility surface.
+
+## Four-bit SQ8 candidate filtering
+
+A four-bit scalar-quantized candidate index was tested with the same
+10,000-row, 128-dimensional scan shape. With 22 candidates, Recall@10 was
+0.3492 filtered and 0.2350 unfiltered. Raising the candidate window to 352
+improved recall to 0.9468 and 0.7824, but the unfiltered group still missed the
+0.95 requirement and total query time regressed by 9.4%. The prototype was
+removed.
+
+## Smaller SQ8 candidate window
+
+The retained eight-bit SQ8 path used roughly 22 candidates for the benchmark's
+`K=11`. A 16-candidate window was expected to reduce exact re-ranking work.
+Five alternating image pairs measured a candidate/baseline total-query ratio of
+1.016952, and the candidate was faster in only 1/5 pairs. The smaller window
+was reverted because it reduced recall margin without producing a stable
+latency benefit.
+
+## Reduced committed-record cache
+
+The committed-record cache was reduced from 16 MiB to 8 MiB and then to 12 MiB
+to trade page-cache memory for additional reads.
+
+- At 8 MiB, the peak-memory ratio was 0.950745, but the total-query ratio was
+  1.111212 and the candidate was faster in only 1/5 pairs.
+- At 12 MiB, the peak-memory ratio was 0.993446, but the total-query ratio was
+  1.043872 and the candidate was faster in only 2/5 pairs.
+
+Both changes were reverted. The memory reduction did not compensate for the
+query regression.
+
+## Reuse transaction-stage records after WAL sync
+
+After the durable WAL sync, the commit path decoded staged records to update
+the rebuildable primary index. A candidate reused the records already held by
+the transaction stage to publish that index directly. Twenty-one alternating
+durable-write pairs measured a baseline median of 1.4323261 seconds and a
+candidate median of 1.4743245 seconds, about 2.9% slower. Physical writes were
+identical. The source was reverted because the storage-core change had no
+stable benefit.
+
+## Partial-dimension SQ8 codebooks
+
+Two partial-dimension SQ8 prototypes were evaluated to reduce index memory and
+scan work while retaining exact re-ranking:
+
+- A 112-dimensional codebook produced Recall@10 of 0.8288 filtered and 0.7498
+  unfiltered.
+- A 120-dimensional codebook produced Recall@10 of 0.9438 filtered and 0.9004
+  unfiltered, with 520 queries failing the local result check.
+
+Both prototypes were reverted. They did not meet the required recall threshold
+and therefore could not be considered performance candidates.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.
