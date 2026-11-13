@@ -447,6 +447,13 @@ class NativeParserTests(unittest.TestCase):
         parsed[0][0] = 9.0
         self.assertEqual(parsed[1], self.parse_vector(texts[1], 2))
         self.assertIsNone(self.parse_vectors(['[0,1]', '[01,2]'], 2))
+        many = [f'[{index}.25,{-index}.5]' for index in range(100)]
+        self.assertEqual(
+            self.parse_vectors(many, 2),
+            [self.parse_vector(text, 2) for text in many])
+        invalid_many = list(many)
+        invalid_many[53] = '[01,2]'
+        self.assertIsNone(self.parse_vectors(invalid_many, 2))
 
 
 class NativeMemoryTests(unittest.TestCase):

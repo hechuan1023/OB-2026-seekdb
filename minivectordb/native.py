@@ -12,16 +12,30 @@ from pathlib import Path
 
 _parse_vector = None
 _parse_vectors = None
+_parse_vectors_omp = None
 _exact_distance = None
 _exact_distances = None
 _loaded = False
+_parse_threads = 1
+
+
+def _cpu_limit():
+    try:
+        quota, period = Path('/sys/fs/cgroup/cpu.max').read_text().split()
+        if quota == 'max':
+            return 1
+        return max(1, min(4, int(quota) // int(period)))
+    except (OSError, ValueError):
+        return 1
 
 
 def _library():
-    global _parse_vector, _parse_vectors, _exact_distance, _exact_distances, _loaded
+    global _parse_vector, _parse_vectors, _parse_vectors_omp
+    global _exact_distance, _exact_distances, _loaded, _parse_threads
     if _loaded:
         return _parse_vector
     _loaded = True
+    _parse_threads = _cpu_limit()
     filename = '_native.dll' if os.name == 'nt' else '_native.so'
     try:
         library = ctypes.CDLL(str(Path(__file__).with_name(filename)))
@@ -41,6 +55,19 @@ def _library():
                                     ctypes.c_size_t, ctypes.c_size_t, ctypes.c_void_p]
             batch_parse.restype = ctypes.c_int64
             _parse_vectors = batch_parse
+        try:
+            batch_parse_omp = library.mv_parse_vectors_omp
+        except AttributeError:
+            _parse_vectors_omp = None
+        else:
+            batch_parse_omp.argtypes = [
+                ctypes.POINTER(ctypes.c_char_p),
+                ctypes.POINTER(ctypes.c_size_t),
+                ctypes.c_size_t, ctypes.c_size_t, ctypes.c_void_p,
+                ctypes.c_uint64,
+            ]
+            batch_parse_omp.restype = ctypes.c_int64
+            _parse_vectors_omp = batch_parse_omp
         exact = library.mv_exact_distance
         exact.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t]
         exact.restype = ctypes.c_double
@@ -51,7 +78,8 @@ def _library():
         batch.restype = ctypes.c_int64
         _exact_distances = batch
     except (OSError, AttributeError):
-        _parse_vector = _parse_vectors = _exact_distance = _exact_distances = None
+        _parse_vector = _parse_vectors = _parse_vectors_omp = None
+        _exact_distance = _exact_distances = None
     return _parse_vector
 
 
@@ -108,8 +136,13 @@ def parse_vectors(texts, size):
     pointers = (ctypes.c_char_p * len(encoded))(*encoded)
     lengths = (ctypes.c_size_t * len(encoded))(*(len(raw) for raw in encoded))
     flat = array('f', [0.0]) * (size * len(encoded))
-    returned = _parse_vectors(pointers, lengths, len(encoded), size,
-                              flat.buffer_info()[0])
+    if _parse_vectors_omp is not None and _parse_threads > 1 and len(encoded) >= 32:
+        returned = _parse_vectors_omp(
+            pointers, lengths, len(encoded), size, flat.buffer_info()[0],
+            _parse_threads)
+    else:
+        returned = _parse_vectors(pointers, lengths, len(encoded), size,
+                                  flat.buffer_info()[0])
     if returned != len(encoded):
         return None
     # array slicing already returns an independent array('f'); wrapping each

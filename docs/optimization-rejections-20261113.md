@@ -245,6 +245,65 @@ timings measured 0.118174/0.128662 s for the current reduction and
 the algebra would also require a broader floating-point error proof before it
 could safely select exact candidates. The prototype was removed.
 
+The dot form was revisited on the current `a1e13a5cf` baseline with a
+standalone 10,000-row, 128-dimensional, 1,000-query kernel benchmark. It used
+float32 row norms and the same sorted K+1 candidate collector. Three runs
+measured candidate/baseline median ratios of 1.019549, 1.014944, and 1.021161,
+so the nominally shorter distance loop was consistently slower once the
+per-row norm load and reconstruction arithmetic were included. The source was
+not changed.
+
+## Reused ctypes output buffers
+
+The exact TopK wrapper allocated three small arrays for positions, selection
+distances, and exact distances on every query. A private reuse path returned
+bounded `memoryview` slices for the synchronous engine consumer while the
+public native method kept its allocating behavior. An isolated 2,000-query
+wrapper benchmark was 3.06% faster in the median and won 15/15 rounds.
+
+That gain did not survive the complete engine path. A same-process 31-round
+engine A/B alternated the allocating and reuse paths per query on one snapshot,
+checked every ID and distance, and measured a candidate/baseline median ratio
+of 1.039938 overall, 1.146935 for filtered queries, and 0.998315 for
+unfiltered queries. The candidate won only 15/31 total-query rounds. Python
+`memoryview` indexing in the candidate-verification loop outweighed the saved
+array initialization. The source and its focused test were reverted.
+
+## Native primary-key output
+
+The first key-returning prototype still called the position-returning kernel
+and copied each selected position to its primary key. A second prototype wrote
+the ranked primary keys and exact distances directly from the candidate loop,
+removing the position buffer and second key lookup in both the single-thread and
+OpenMP paths. A focused differential test compared every key, selection
+distance, and exact distance with the existing kernel.
+
+A same-process 61-round engine A/B alternated the two paths per query on one
+10,000-row, 128-dimensional snapshot and checked every result. The paired
+candidate/baseline median ratio was 1.022118 overall, 1.109157 for filtered
+queries, and 0.982864 for unfiltered queries. The candidate won only 30/61
+total-query rounds and 30/61 filtered rounds. The unfiltered gain did not
+survive the filtered path, so the ABI additions, Python routing, focused test,
+and source changes were reverted.
+
+## Specialized three-column row encoding
+
+The write profile showed compact row encoding at about 82 ms for 10,000 rows.
+A specialized path for the benchmark's `(BIGINT, VARCHAR, array('f'))` row
+shape combined the fixed headers into two `struct.Struct` calls. Its bytes were
+identical to the generic encoder, and a container microbenchmark reduced
+10,000-row encoding from 15.56 ms to 7.14 ms, winning 31/31 rounds.
+
+The gain did not survive the complete durable write path. Twenty-one
+alternating fresh-container pairs used the JSONL protocol, 10,000 rows, 128
+dimensions, 100-row commits, and restarted verification of every row. The
+paired candidate/baseline write median ratio was 1.001728 and the candidate won
+only 10/21 pairs. Physical writes were identical at 6,025,216 bytes in every
+run. Median cgroup peak memory was 1.30% lower and the candidate was lower in
+18/21 pairs, but this did not justify retaining a format-specific encoder when
+the primary write metric had no stable improvement. The source and test were
+reverted.
+
 ## Retained changes
 
 - Canonical multi-row INSERT parser fast path: commit `46937676b`.

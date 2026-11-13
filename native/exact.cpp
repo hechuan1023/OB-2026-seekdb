@@ -238,6 +238,37 @@ MV_EXPORT std::int64_t mv_parse_vectors(
   return static_cast<std::int64_t>(count);
 }
 
+// Parallel batch parsing keeps each vector independent and returns the same
+// zero-based first-invalid index as the sequential entry point. The Python
+// caller discards this buffer and falls back to the per-value path on failure,
+// so successful rows parsed before an error remain unobservable.
+MV_EXPORT std::int64_t mv_parse_vectors_omp(
+    const char *const *texts, const std::size_t *lengths, std::size_t count,
+    std::size_t dimensions, float *out, std::uint64_t threads) {
+  if ((!texts || !lengths || !out) && count) return -1;
+#if defined(_OPENMP)
+  if (threads > 1 && count >= 32) {
+    if (count > static_cast<std::size_t>(INT64_MAX)) return -1;
+    std::int64_t first_error = static_cast<std::int64_t>(count);
+    const std::int64_t total = static_cast<std::int64_t>(count);
+    const int workers = static_cast<int>(
+        std::min<std::uint64_t>(threads, static_cast<std::uint64_t>(total)));
+#pragma omp parallel for num_threads(workers) schedule(static) \
+    reduction(min : first_error)
+    for (std::int64_t i = 0; i < total; ++i) {
+      if (mv_parse_vector(texts[i], lengths[i], out + i * dimensions,
+                          dimensions) !=
+          static_cast<std::int64_t>(dimensions))
+        first_error = i;
+    }
+    return first_error;
+  }
+#else
+  (void)threads;
+#endif
+  return mv_parse_vectors(texts, lengths, count, dimensions, out);
+}
+
 MV_EXPORT int mv_abi_version() { return 1; }
 
 // Exact double-precision distance, shared by native verification and the
