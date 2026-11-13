@@ -442,6 +442,22 @@ result sets matched and the median of run-median candidate/baseline total-query
 ratios was 0.989624; physical I/O was unchanged and peak-memory ratios were
 approximately 1.0001 to 1.0007. See `partial-bound-exact-20261113.md`.
 
+## Scalar TopK threshold
+
+The next prototype kept the current K-th distance in a scalar outside the
+scan loop instead of reading `ranked.back()` and checking the container size
+for every row. The direct kernel A/B was nearly neutral: the unfiltered paired
+median candidate/baseline ratio was 0.994439 with the candidate faster in 6/9
+rounds, while the filtered ratio was 1.002895 with the candidate faster in only
+2/9 rounds.
+
+Three end-to-end seeds used seven alternating pairs each. The paired median
+total-query ratios were 0.982253, 0.979337, and 1.020172; the third seed
+regressed in total, filtered, and unfiltered queries. All result sets matched,
+physical I/O did not change materially, and peak-memory ratios stayed near
+1.000 to 1.006. The direction was not stable enough to retain, so the source
+was reverted and the experiment is recorded here.
+
 ## Retained changes
 
 - The 128-dimension exact TopK candidate scan uses one conservative 64-dimension
