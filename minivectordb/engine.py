@@ -10,7 +10,8 @@ from array import array
 from dataclasses import dataclass
 
 from .errors import DBError, require
-from .native import parse_vector
+from .native import distance as native_distance
+from .native import parse_vector, parse_vectors
 from .sorting import Descending, Sorter, file_rows
 from .sql import parse
 from .storage import Storage, write_record
@@ -230,9 +231,24 @@ class Engine:
             columns = names
         require(len(columns) == len(names) and set(columns) == set(names), 'TYPE_ERROR', 'INSERT must supply each column exactly once')
         positions = [columns.index(name) for name in names]
-        for values in rows:
+        batched_vectors = {}
+        if (self.native and len(rows) > 1
+                and all(len(values) == len(names) for values in rows)):
+            for index, column in enumerate(schema['columns']):
+                if column[1] != 'VECTOR':
+                    continue
+                literals = [values[positions[index]] for values in rows]
+                if any(literal.kind != 'string' for literal in literals):
+                    continue
+                parsed = parse_vectors([literal.value for literal in literals],
+                                       column[2])
+                if parsed is not None:
+                    batched_vectors[index] = parsed
+        for row_index, values in enumerate(rows):
             require(len(values) == len(names), 'TYPE_ERROR', 'Wrong number of values')
-            row = tuple([convert(values[positions[i]], col, self.native)
+            row = tuple([batched_vectors[i][row_index]
+                         if i in batched_vectors else
+                         convert(values[positions[i]], col, self.native)
                          for i, col in enumerate(schema['columns'])])
             key = row[schema['pk']]
             require(self.storage.get(schema['id'], key) is None, 'CONSTRAINT_ERROR', 'Duplicate primary key')
@@ -412,7 +428,10 @@ class Engine:
         i = self.column(schema, expression[1])
         require(schema['columns'][i][1] == 'VECTOR', 'TYPE_ERROR', 'L2_DISTANCE requires VECTOR')
         vector = convert(expression[2], schema['columns'][i], self.native)
-        return ('distance', i, tuple(vector))
+        # Keep the array: the native kernel and distance functions consume its
+        # buffer directly. The generic sorter path converts it to a tuple only
+        # where a hashable expression is required.
+        return ('distance', i, vector)
 
     @staticmethod
     def evaluate(row, expression):
@@ -420,7 +439,7 @@ class Engine:
             value = row[expression[1]]
             # Do not expose the mutable array held by an immutable cached version.
             return array('f', value) if isinstance(value, array) else value
-        return math.dist(row[expression[1]], expression[2])
+        return native_distance(row[expression[1]], expression[2])
 
     def select(self, table, projections, where, order, limit):
         schema = self.table(table)
@@ -461,12 +480,15 @@ class Engine:
                 pk_only = all(expr == pk_expression or expr == distance_expression
                               for expr in expressions)
                 nearest = self.vector_indexes.topk(schema, distance_expression, conditions, limit,
-                                                   self.matches, pk_only)
+                                                   self.matches, pk_only, self.mode)
                 if nearest is not None:
                     if pk_only:
-                        for key, distance in nearest:
-                            yield tuple(key if expr == pk_expression else distance
-                                        for expr in expressions)
+                        if expressions == [pk_expression, distance_expression]:
+                            yield from nearest
+                        else:
+                            for key, distance in nearest:
+                                yield tuple(key if expr == pk_expression else distance
+                                            for expr in expressions)
                     else:
                         for row, distance in nearest:
                             # The kernel path already evaluated this exact distance.
@@ -482,11 +504,23 @@ class Engine:
                 return
             # Bind shared expressions once. A distance expression contains the
             # query vector: hashing it for every row repeatedly hashes all its
-            # dimensions. Only the generic sorter path needs the slot table.
-            unique = list(dict.fromkeys(expressions + [expr for expr, _ in sort_keys]))
-            slots = {expr: i for i, expr in enumerate(unique)}
-            projection_slots = [slots[expr] for expr in expressions]
-            order_slots = [(slots[expr], descending) for expr, descending in sort_keys]
+            # dimensions. Only the generic sorter path needs the slot table, so
+            # convert the query array to a hashable tuple here.
+            def hashable(expr):
+                return (expr[0], expr[1], tuple(expr[2])) if expr[0] == 'distance' else expr
+            projection_expressions = [hashable(expr) for expr in expressions]
+            order_expressions = [hashable(expr) for expr, _ in sort_keys]
+            unique_hashable = list(dict.fromkeys(projection_expressions + order_expressions))
+            originals = {}
+            for expr, key in zip(expressions, projection_expressions):
+                originals[key] = expr
+            for (expr, _), key in zip(sort_keys, order_expressions):
+                originals[key] = expr
+            unique = [originals[key] for key in unique_hashable]
+            slots = {key: i for i, key in enumerate(unique_hashable)}
+            projection_slots = [slots[key] for key in projection_expressions]
+            order_slots = [(slots[key], descending) for key, (_, descending)
+                           in zip(order_expressions, sort_keys)]
             sorter = Sorter(self.storage.directory, self.sort_memory, limit)
             try:
                 for row in candidates:

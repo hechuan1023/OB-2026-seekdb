@@ -53,6 +53,13 @@ class EngineTests(unittest.TestCase):
         self.create()
         self.db.execute("INSERT INTO d VALUES (9,'x','[1,0]'),(-3,'x','[0,1]'),(2,'x','[-1,0]')")
         self.assertEqual(self.query("SELECT id FROM d ORDER BY L2_DISTANCE(v,'[0,0]') LIMIT 2"), [(-3,), (2,)])
+        self.assertEqual(
+            self.query(
+                "SELECT L2_DISTANCE(v,'[0,0]') AS d,id FROM d "
+                "ORDER BY d LIMIT 2"
+            ),
+            [(1.0, -3), (1.0, 2)],
+        )
 
     def test_varchar_unicode_and_codepoint_order(self):
         self.db.execute('CREATE TABLE t(id BIGINT PRIMARY KEY, s VARCHAR(2))')

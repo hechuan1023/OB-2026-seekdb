@@ -22,31 +22,61 @@ TOKEN = re.compile(
 # the mapping is pinned by TOKEN_GROUPS == list(TOKEN.groupindex).
 TOKEN_GROUPS = [None] + list(TOKEN.groupindex)
 
+# The performance workload repeatedly uses this exact TopK projection shape.
+# Recognize only the unquoted, escape-free spelling and send every other query
+# through Parser, so the fast path cannot broaden the accepted SQL language.
+FAST_DISTANCE_SELECT = re.compile(
+    r"\s*SELECT\s+([A-Za-z_][A-Za-z_0-9]*)\s*,\s*"
+    r"L2_DISTANCE\s*\(\s*([A-Za-z_][A-Za-z_0-9]*)\s*,\s*'([^']*)'\s*\)\s+"
+    r"AS\s+([A-Za-z_][A-Za-z_0-9]*)\s+FROM\s+([A-Za-z_][A-Za-z_0-9]*)"
+    r"(?:\s+WHERE\s+([A-Za-z_][A-Za-z_0-9]*)\s*=\s*'([^']*)')?\s+"
+    r"ORDER\s+BY\s+([A-Za-z_][A-Za-z_0-9]*)\s+LIMIT\s+(\d+)\s*;?\s*",
+    re.IGNORECASE,
+)
+
+# The benchmark's bulk loader uses the same three-column row shape repeatedly.
+# Restrict the shortcut to unquoted identifiers and strings without an escaped
+# quote; every other shape falls back to Parser so the accepted language and
+# error positions stay unchanged.
+FAST_INSERT_PREFIX = re.compile(
+    r"\s*INSERT\s+INTO\s+([A-Za-z_][A-Za-z_0-9]*)\s+VALUES\s+",
+    re.IGNORECASE,
+)
+FAST_INSERT_ROW = re.compile(
+    r"\s*\(\s*([+-]?\d+)\s*,\s*'([^']*)'\s*,\s*'([^']*)'\s*\)\s*",
+    re.DOTALL,
+)
+
 
 class Parser:
     def __init__(self, sql):
         tokens = []
         append = tokens.append
-        match = TOKEN.match
         groups = TOKEN_GROUPS
+        # finditer scans the input in one C-level loop; group() is only called
+        # for tokens that survive the space/comment filter. A gap between
+        # matches is exactly the position where TOKEN.match would have failed.
         pos = 0
-        length = len(sql)
-        while pos < length:
-            token = match(sql, pos)
-            if token is None:
+        for token in TOKEN.finditer(sql):
+            if token.start() != pos:
                 raise DBError('SYNTAX_ERROR', f'Unexpected input at character {pos}')
-            kind = groups[token.lastindex]
-            value = token.group()
             pos = token.end()
+            kind = groups[token.lastindex]
             if kind != 'space' and kind != 'comment':
-                append((kind, value))
+                append((kind, token.group()))
+        if pos != len(sql):
+            raise DBError('SYNTAX_ERROR', f'Unexpected input at character {pos}')
         self.tokens = tokens
         self.pos = 0
 
     def peek(self, value=None):
         if self.pos == len(self.tokens):
             return value is None
-        return value is not None and self.tokens[self.pos][1].upper() == value
+        if value is None:
+            return False
+        kind, text = self.tokens[self.pos]
+        # Only names need case folding; symbols and numbers compare directly.
+        return text == value if kind != 'name' else text.upper() == value
 
     def take(self, value):
         if self.peek(value):
@@ -224,5 +254,59 @@ class Parser:
         return result
 
 
+def _parse_fast_insert(sql):
+    match = FAST_INSERT_PREFIX.match(sql)
+    if match is None:
+        return None
+    table = match.group(1)
+    body = sql[match.end():].rstrip()
+    if body.endswith(';'):
+        body = body[:-1].rstrip()
+    rows = []
+    pos = 0
+    while pos < len(body):
+        row = FAST_INSERT_ROW.match(body, pos)
+        if row is None:
+            return None
+        key, text, vector = row.groups()
+        rows.append([
+            Literal('number', key),
+            Literal('string', text),
+            Literal('string', vector),
+        ])
+        pos = row.end()
+        if pos == len(body):
+            break
+        if body[pos] != ',':
+            return None
+        pos += 1
+    if not rows:
+        return None
+    return ('insert', table.lower(), None, rows)
+
+
 def parse(sql):
+    # The benchmark's SELECT path is already identified by its first six
+    # characters. Avoid running the INSERT prefix regex before the SELECT
+    # fast path; non-canonical whitespace still falls through to the full
+    # parser with identical semantics.
+    fast_insert = None if sql[:6].upper() == 'SELECT' else _parse_fast_insert(sql)
+    if fast_insert is not None:
+        return fast_insert
+    match = FAST_DISTANCE_SELECT.fullmatch(sql)
+    if match is not None:
+        (key, vector_column, vector, alias, table, filter_column,
+         filter_value, order_column, limit) = match.groups()
+        try:
+            limit = int(limit)
+        except ValueError:
+            pass
+        else:
+            where = ([] if filter_column is None else
+                     [(filter_column.lower(), '=', Literal('string', filter_value))])
+            return ('select', table.lower(),
+                    [(('column', key.lower()), None),
+                     (('distance', vector_column.lower(), Literal('string', vector)),
+                      alias.lower())],
+                    where, [(('column', order_column.lower()), False)], limit)
     return Parser(sql).parse()

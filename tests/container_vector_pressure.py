@@ -59,7 +59,7 @@ def main():
     original_snapshot = db.vector_indexes.entries[db.table('t')['id']]
     db.execute('BEGIN')
     assert db.execute("UPDATE t SET tag='changed' WHERE id<1000") == 1000
-    stage_bytes = (directory / 'transaction.stage').stat().st_size
+    stage_bytes = db.storage.stage.tell()
     try:
         db.execute(f"INSERT INTO t VALUES ({count},'bad','{zero}'),(0,'dup','{zero}')")
         raise AssertionError('Expected duplicate primary-key error')

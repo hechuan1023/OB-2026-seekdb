@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
+#include <queue>
 #include <vector>
 
 // std::from_chars for double needs GCC 11+; older host toolchains (MinGW 8)
@@ -71,7 +73,71 @@ static inline double distance_squared(const float *__restrict v,
   return acc[0] + acc[1] + acc[2] + acc[3] + acc[4] + acc[5] + acc[6] + acc[7];
 }
 
+static inline double distance_squared_bounded(
+    const float *__restrict v, const float *__restrict query,
+    std::uint64_t dimensions, double) {
+  return distance_squared(v, query, dimensions);
+}
+
 #if defined(__x86_64__) || defined(__i386__)
+// Single-precision reduction used only to *select* candidates. The caller
+// re-evaluates the selected rows in double precision and falls back to the
+// exact kernel unless the float32 candidate boundary is far enough from the
+// kept set (see vector_index.py). Eight lanes per accumulator keep the
+// summation order fixed and let one AVX2 register hold eight dimensions.
+__attribute__((target("avx2,fma"))) static inline float
+distance_f32_bounded(const float *__restrict v,
+                     const float *__restrict query,
+                     std::uint64_t dimensions, double threshold) {
+  __m256 a0 = _mm256_setzero_ps(), a1 = _mm256_setzero_ps();
+  std::uint64_t j = 0;
+  const std::uint64_t checkpoint =
+      std::min<std::uint64_t>(dimensions & ~std::uint64_t{15}, 64);
+  for (; j < checkpoint; j += 16) {
+    const __m256 d0 = _mm256_sub_ps(_mm256_loadu_ps(v + j), _mm256_loadu_ps(query + j));
+    const __m256 d1 = _mm256_sub_ps(_mm256_loadu_ps(v + j + 8), _mm256_loadu_ps(query + j + 8));
+    a0 = _mm256_fmadd_ps(d0, d0, a0);
+    a1 = _mm256_fmadd_ps(d1, d1, a1);
+  }
+  // All terms are non-negative. Once a conservative lower bound on the
+  // partial sum exceeds the current K-th candidate, this row cannot enter the
+  // candidate set. The 0.1% margin is much larger than the accumulated float32
+  // error and preserves the existing exact re-check boundary.
+  if (j == 64 && threshold < 1e300) {
+    const __m256 running = _mm256_add_ps(a0, a1);
+    const __m128 lo = _mm256_castps256_ps128(running);
+    const __m128 hi = _mm256_extractf128_ps(running, 1);
+    __m128 pair = _mm_add_ps(lo, hi);
+    pair = _mm_hadd_ps(pair, pair);
+    pair = _mm_hadd_ps(pair, pair);
+    const float partial = _mm_cvtss_f32(pair);
+    if (partial > static_cast<float>(threshold) * 1.001f + 1e-30f)
+      return partial;
+  }
+  for (; j + 16 <= dimensions; j += 16) {
+    const __m256 d0 = _mm256_sub_ps(_mm256_loadu_ps(v + j), _mm256_loadu_ps(query + j));
+    const __m256 d1 = _mm256_sub_ps(_mm256_loadu_ps(v + j + 8), _mm256_loadu_ps(query + j + 8));
+    a0 = _mm256_fmadd_ps(d0, d0, a0);
+    a1 = _mm256_fmadd_ps(d1, d1, a1);
+  }
+  for (; j + 8 <= dimensions; j += 8) {
+    const __m256 d = _mm256_sub_ps(_mm256_loadu_ps(v + j), _mm256_loadu_ps(query + j));
+    a0 = _mm256_fmadd_ps(d, d, a0);
+  }
+  __m256 sum = _mm256_add_ps(a0, a1);
+  const __m128 lo = _mm256_castps256_ps128(sum);
+  const __m128 hi = _mm256_extractf128_ps(sum, 1);
+  __m128 pair = _mm_add_ps(lo, hi);
+  pair = _mm_hadd_ps(pair, pair);
+  pair = _mm_hadd_ps(pair, pair);
+  float total = _mm_cvtss_f32(pair);
+  for (; j < dimensions; ++j) {
+    const float delta = v[j] - query[j];
+    total += delta * delta;
+  }
+  return total;
+}
+
 // Explicit FMA reduction for CPUs that support it. The two accumulators and the
 // horizontal sum use a different rounding order than distance_squared, so the
 // values can differ in the last bits; Python's 1e-12 boundary guard and its
@@ -99,6 +165,12 @@ distance_fma(const float *__restrict v, const float *__restrict query,
     sum += delta * delta;
   }
   return sum;
+}
+
+static inline double distance_fma_bounded(
+    const float *__restrict v, const float *__restrict query,
+    std::uint64_t dimensions, double) {
+  return distance_fma(v, query, dimensions);
 }
 #endif
 
@@ -187,13 +259,92 @@ MV_EXPORT std::int64_t mv_parse_vector(const char *text, std::size_t length,
   return p == end ? static_cast<std::int64_t>(count) : -1;
 }
 
+// Parse a statement's vector literals in one call. The return value is the
+// number of successfully parsed vectors, or the zero-based index of the first
+// invalid literal. Callers fall back to the per-value path on failure so the
+// original error ordering and accepted language stay unchanged.
+MV_EXPORT std::int64_t mv_parse_vectors(
+    const char *const *texts, const std::size_t *lengths, std::size_t count,
+    std::size_t dimensions, float *out) {
+  if ((!texts || !lengths || !out) && count) return -1;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (mv_parse_vector(texts[i], lengths[i], out + i * dimensions,
+                        dimensions) != static_cast<std::int64_t>(dimensions))
+      return static_cast<std::int64_t>(i);
+  }
+  return static_cast<std::int64_t>(count);
+}
+
+// Parallel batch parsing keeps each vector independent and returns the same
+// zero-based first-invalid index as the sequential entry point. The Python
+// caller discards this buffer and falls back to the per-value path on failure,
+// so successful rows parsed before an error remain unobservable.
+MV_EXPORT std::int64_t mv_parse_vectors_omp(
+    const char *const *texts, const std::size_t *lengths, std::size_t count,
+    std::size_t dimensions, float *out, std::uint64_t threads) {
+  if ((!texts || !lengths || !out) && count) return -1;
+#if defined(_OPENMP)
+  if (threads > 1 && count >= 32) {
+    if (count > static_cast<std::size_t>(INT64_MAX)) return -1;
+    std::int64_t first_error = static_cast<std::int64_t>(count);
+    const std::int64_t total = static_cast<std::int64_t>(count);
+    const int workers = static_cast<int>(
+        std::min<std::uint64_t>(threads, static_cast<std::uint64_t>(total)));
+#pragma omp parallel for num_threads(workers) schedule(static) \
+    reduction(min : first_error)
+    for (std::int64_t i = 0; i < total; ++i) {
+      if (mv_parse_vector(texts[i], lengths[i], out + i * dimensions,
+                          dimensions) !=
+          static_cast<std::int64_t>(dimensions))
+        first_error = i;
+    }
+    return first_error;
+  }
+#else
+  (void)threads;
+#endif
+  return mv_parse_vectors(texts, lengths, count, dimensions, out);
+}
+
 MV_EXPORT int mv_abi_version() { return 1; }
+
+// Exact double-precision distance, shared by native verification and the
+// Python fallback path so both produce identical bits. A plain ordered sum is
+// deterministic; it differs from math.dist only in the last bits, far inside
+// the official 1e-5 tolerance.
+static inline double exact_distance(const float *__restrict v,
+                                    const float *__restrict query,
+                                    std::uint64_t dimensions) {
+  double sum = 0.0;
+  for (std::uint64_t j = 0; j < dimensions; ++j) {
+    const double delta = static_cast<double>(v[j]) - static_cast<double>(query[j]);
+    sum += delta * delta;
+  }
+  return std::sqrt(sum);
+}
+
+MV_EXPORT double mv_exact_distance(const float *v, const float *query,
+                                   std::uint64_t dimensions) noexcept {
+  if (!v || !query || !dimensions) return 0.0;
+  return exact_distance(v, query, dimensions);
+}
+
+MV_EXPORT std::int64_t mv_exact_distances(
+    const float *vectors, const float *query, const std::uint64_t *positions,
+    std::uint64_t count, std::uint64_t dimensions, double *out) noexcept {
+  if (!vectors || !query || !positions || !out || !dimensions) return -1;
+  for (std::uint64_t i = 0; i < count; ++i)
+    out[i] = exact_distance(vectors + positions[i] * dimensions, query, dimensions);
+  return static_cast<std::int64_t>(count);
+}
 
 // Retain K+1 candidates. Python verifies a conservative boundary gap, re-evaluates
 // selected distances with math.dist, and falls back on ambiguous boundaries.
-template <typename Distance>
-static std::int64_t topk_impl(
-    Distance distance, const float *__restrict vectors,
+// The distance function is a template value so it can be inlined; a function
+// pointer would force one indirect call per row.
+template <auto Distance, std::uint64_t FixedDimensions>
+__attribute__((always_inline)) static inline std::int64_t topk_body(
+    const float *__restrict vectors,
     const std::int64_t *__restrict keys, std::uint64_t rows,
     std::uint64_t dimensions, const float *__restrict query,
     const std::uint64_t *__restrict selection, std::uint64_t selected,
@@ -202,37 +353,120 @@ static std::int64_t topk_impl(
   if (!vectors || !keys || !query || !positions || !distances || !dimensions ||
       dimensions > 65536 || keep == 0 || rows > SIZE_MAX / dimensions)
     return -1;
+  // A nonzero FixedDimensions makes the width a compile-time constant, which
+  // lets the compiler unroll the distance loop for the benchmark dimension.
+  const std::uint64_t width = FixedDimensions ? FixedDimensions : dimensions;
   const std::uint64_t count = selection ? selected : rows;
   keep = std::min(keep, count);
   try {
-    std::vector<Candidate> heap;
-    heap.reserve(static_cast<std::size_t>(keep));
+    // Keep the candidates in ascending order. The benchmark's K=11 is small,
+    // and improvements are rare after the first few rows, so a linear
+    // insertion is cheaper than maintaining a heap and sorting it afterwards.
+    std::vector<Candidate> ranked;
+    ranked.reserve(static_cast<std::size_t>(keep));
     for (std::uint64_t n = 0; n < count; ++n) {
       const std::uint64_t row = selection ? selection[n] : n;
       if (row >= rows) return -1;
       // Squared distance: monotone in the true distance, so ordering and ties
       // are unchanged. Python re-evaluates the selected rows with math.dist and
       // its boundary guard only needs a monotone key.
-      const Candidate item{distance(vectors + row * dimensions, query, dimensions),
+      const double threshold =
+          ranked.size() == keep ? ranked.back().distance
+                                : std::numeric_limits<double>::infinity();
+      const Candidate item{Distance(vectors + row * width, query, width,
+                                    threshold),
                            keys[row], row};
-      if (heap.size() < keep) {
-        heap.push_back(item);
-        std::push_heap(heap.begin(), heap.end(), better);
-      } else if (better(item, heap.front())) {
-        std::pop_heap(heap.begin(), heap.end(), better);
-        heap.back() = item;
-        std::push_heap(heap.begin(), heap.end(), better);
-      }
+      if (ranked.size() == keep && !better(item, ranked.back()))
+        continue;
+      const auto at = std::lower_bound(ranked.begin(), ranked.end(), item,
+                                       better);
+      ranked.insert(at, item);
+      if (ranked.size() > keep)
+        ranked.pop_back();
     }
-    std::sort(heap.begin(), heap.end(), better);
-    for (std::size_t i = 0; i < heap.size(); ++i) {
-      positions[i] = heap[i].position;
-      distances[i] = heap[i].distance;
+    for (std::size_t i = 0; i < ranked.size(); ++i) {
+      positions[i] = ranked[i].position;
+      distances[i] = ranked[i].distance;
     }
-    return static_cast<std::int64_t>(heap.size());
+    return static_cast<std::int64_t>(ranked.size());
   } catch (...) {
     return -1;  // No C++ exception may escape the C ABI.
   }
+}
+
+template <auto Distance, std::uint64_t FixedDimensions>
+static inline std::vector<Candidate> topk_scan_range(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t start, std::uint64_t end, std::uint64_t dimensions,
+    const float *__restrict query, std::uint64_t keep) {
+  const std::uint64_t width = FixedDimensions ? FixedDimensions : dimensions;
+  std::vector<Candidate> ranked;
+  ranked.reserve(static_cast<std::size_t>(keep));
+  for (std::uint64_t row = start; row < end; ++row) {
+    const double threshold =
+        ranked.size() == keep ? ranked.back().distance
+                              : std::numeric_limits<double>::infinity();
+    const Candidate item{Distance(vectors + row * width, query, width,
+                                  threshold),
+                         keys[row], row};
+    if (ranked.size() == keep && !better(item, ranked.back())) continue;
+    const auto at = std::lower_bound(ranked.begin(), ranked.end(), item, better);
+    ranked.insert(at, item);
+    if (ranked.size() > keep) ranked.pop_back();
+  }
+  return ranked;
+}
+
+template <auto Distance, std::uint64_t FixedDimensions>
+static inline std::vector<Candidate> topk_scan_selection_range(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    const std::uint64_t *__restrict selection, std::uint64_t start,
+    std::uint64_t end, std::uint64_t dimensions,
+    const float *__restrict query, std::uint64_t keep) {
+  const std::uint64_t width = FixedDimensions ? FixedDimensions : dimensions;
+  std::vector<Candidate> ranked;
+  ranked.reserve(static_cast<std::size_t>(keep));
+  for (std::uint64_t n = start; n < end; ++n) {
+    const std::uint64_t row = selection[n];
+    const double threshold =
+        ranked.size() == keep ? ranked.back().distance
+                              : std::numeric_limits<double>::infinity();
+    const Candidate item{Distance(vectors + row * width, query, width,
+                                  threshold),
+                         keys[row], row};
+    if (ranked.size() == keep && !better(item, ranked.back())) continue;
+    const auto at = std::lower_bound(ranked.begin(), ranked.end(), item, better);
+    ranked.insert(at, item);
+    if (ranked.size() > keep) ranked.pop_back();
+  }
+  return ranked;
+}
+
+// Generic path: a separate function so its code stays out of the specialized
+// wrapper and does not push the hot loop out of the instruction cache.
+template <auto Distance>
+__attribute__((noinline)) static std::int64_t topk_impl(
+    const float *__restrict vectors,
+    const std::int64_t *__restrict keys, std::uint64_t rows,
+    std::uint64_t dimensions, const float *__restrict query,
+    const std::uint64_t *__restrict selection, std::uint64_t selected,
+    std::uint64_t keep, std::uint64_t *__restrict positions,
+    double *__restrict distances) noexcept {
+  return topk_body<Distance, 0>(vectors, keys, rows, dimensions, query,
+                                selection, selected, keep, positions, distances);
+}
+
+// Unfiltered 128-dimension path: the constant width unrolls the distance loop.
+template <auto Distance>
+__attribute__((always_inline)) static inline std::int64_t topk_impl_128(
+    const float *__restrict vectors,
+    const std::int64_t *__restrict keys, std::uint64_t rows,
+    std::uint64_t dimensions, const float *__restrict query,
+    const std::uint64_t *__restrict selection, std::uint64_t selected,
+    std::uint64_t keep, std::uint64_t *__restrict positions,
+    double *__restrict distances) noexcept {
+  return topk_body<Distance, 128>(vectors, keys, rows, dimensions, query,
+                                  selection, selected, keep, positions, distances);
 }
 
 MV_EXPORT MV_TARGET_CLONES std::int64_t mv_topk(
@@ -241,8 +475,9 @@ MV_EXPORT MV_TARGET_CLONES std::int64_t mv_topk(
     const float *__restrict query, const std::uint64_t *__restrict selection,
     std::uint64_t selected, std::uint64_t keep,
     std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
-  return topk_impl(distance_squared, vectors, keys, rows, dimensions, query,
-                   selection, selected, keep, positions, distances);
+  return topk_impl<distance_squared_bounded>(
+      vectors, keys, rows, dimensions, query, selection, selected, keep,
+      positions, distances);
 }
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -252,12 +487,314 @@ MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t mv_topk_fma(
     const float *__restrict query, const std::uint64_t *__restrict selection,
     std::uint64_t selected, std::uint64_t keep,
     std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
-  return topk_impl(distance_fma, vectors, keys, rows, dimensions, query,
-                   selection, selected, keep, positions, distances);
+  if (dimensions == 128 && selection == nullptr)
+    return topk_impl_128<distance_fma_bounded>(
+        vectors, keys, rows, dimensions, query, selection, selected, keep,
+        positions, distances);
+  return topk_impl<distance_fma_bounded>(
+      vectors, keys, rows, dimensions, query, selection, selected, keep,
+      positions, distances);
+}
+
+// Candidate-selection kernel: float32 distances, same heap and tie-break.
+// Callers must verify the returned rows in double precision and prove the
+// candidate boundary is unambiguous before trusting the result.
+MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t mv_topk_f32(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t rows, std::uint64_t dimensions,
+    const float *__restrict query, const std::uint64_t *__restrict selection,
+    std::uint64_t selected, std::uint64_t keep,
+    std::uint64_t *__restrict positions, double *__restrict distances) noexcept {
+  if (dimensions == 128 && selection == nullptr)
+    return topk_impl_128<distance_f32_bounded>(
+        vectors, keys, rows, dimensions, query, selection, selected, keep,
+        positions, distances);
+  return topk_impl<distance_f32_bounded>(
+      vectors, keys, rows, dimensions, query, selection, selected, keep,
+      positions, distances);
+}
+
+// Candidate selection plus exact verification in one C call. The float32
+// distances remain available for Python's conservative boundary check; the
+// third output contains the same ordered-double distances as
+// mv_exact_distances, avoiding a second ctypes call for the selected rows.
+MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t
+mv_topk_f32_exact(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t rows, std::uint64_t dimensions,
+    const float *__restrict query, const std::uint64_t *__restrict selection,
+    std::uint64_t selected, std::uint64_t keep,
+    std::uint64_t *__restrict positions, double *__restrict distances,
+    double *__restrict exact_distances) noexcept {
+  if (!exact_distances) return -1;
+  const std::int64_t count =
+      mv_topk_f32(vectors, keys, rows, dimensions, query, selection, selected,
+                  keep, positions, distances);
+  if (count < 0) return count;
+  for (std::int64_t i = 0; i < count; ++i)
+    exact_distances[i] =
+        exact_distance(vectors + positions[i] * dimensions, query, dimensions);
+  return count;
+}
+
+MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t
+mv_topk_f32_exact_omp(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t rows, std::uint64_t dimensions,
+    const float *__restrict query, const std::uint64_t *__restrict selection,
+    std::uint64_t selected, std::uint64_t keep, std::uint64_t threads,
+    std::uint64_t *__restrict positions, double *__restrict distances,
+    double *__restrict exact_distances) noexcept {
+  if (!threads || threads < 2 ||
+      (selection == nullptr && rows < 4096) ||
+      (selection != nullptr && selected < 768))
+    return mv_topk_f32_exact(vectors, keys, rows, dimensions, query, selection,
+                             selected, keep, positions, distances,
+                             exact_distances);
+  if (!vectors || !keys || !query || !positions || !distances ||
+      !exact_distances || !dimensions || !rows || !keep)
+    return -1;
+  try {
+    threads = std::min<std::uint64_t>(
+        threads, std::min<std::uint64_t>(rows, 4));
+    if (selection != nullptr) {
+      threads = std::min<std::uint64_t>(threads, selected);
+      std::vector<std::vector<Candidate>> parts(
+          static_cast<std::size_t>(threads));
+#pragma omp parallel for num_threads(static_cast<int>(threads)) schedule(static, 1)
+      for (std::int64_t part = 0; part < static_cast<std::int64_t>(threads);
+           ++part) {
+        const std::uint64_t start = selected * part / threads;
+        const std::uint64_t end = selected * (part + 1) / threads;
+        if (dimensions == 128) {
+          parts[part] = topk_scan_selection_range<distance_f32_bounded, 128>(
+              vectors, keys, selection, start, end, dimensions, query, keep);
+        } else {
+          parts[part] = topk_scan_selection_range<distance_f32_bounded, 0>(
+              vectors, keys, selection, start, end, dimensions, query, keep);
+        }
+      }
+      std::vector<Candidate> ranked;
+      ranked.reserve(static_cast<std::size_t>(keep * threads));
+      for (auto &part : parts)
+        ranked.insert(ranked.end(), part.begin(), part.end());
+      std::sort(ranked.begin(), ranked.end(), better);
+      if (ranked.size() > keep) ranked.resize(keep);
+      for (std::size_t i = 0; i < ranked.size(); ++i) {
+        positions[i] = ranked[i].position;
+        distances[i] = ranked[i].distance;
+        exact_distances[i] =
+            exact_distance(vectors + ranked[i].position * dimensions, query,
+                           dimensions);
+      }
+      return static_cast<std::int64_t>(ranked.size());
+    }
+    std::vector<std::vector<Candidate>> parts(static_cast<std::size_t>(threads));
+#pragma omp parallel for num_threads(static_cast<int>(threads)) schedule(static, 1)
+    for (std::int64_t part = 0; part < static_cast<std::int64_t>(threads);
+         ++part) {
+      const std::uint64_t start = rows * part / threads;
+      const std::uint64_t end = rows * (part + 1) / threads;
+      if (dimensions == 128) {
+        parts[part] = topk_scan_range<distance_f32_bounded, 128>(
+            vectors, keys, start, end, dimensions, query, keep);
+      } else {
+        parts[part] = topk_scan_range<distance_f32_bounded, 0>(
+            vectors, keys, start, end, dimensions, query, keep);
+      }
+    }
+    std::vector<Candidate> ranked;
+    ranked.reserve(static_cast<std::size_t>(keep * threads));
+    for (auto &part : parts)
+      ranked.insert(ranked.end(), part.begin(), part.end());
+    std::sort(ranked.begin(), ranked.end(), better);
+    if (ranked.size() > keep) ranked.resize(keep);
+    for (std::size_t i = 0; i < ranked.size(); ++i) {
+      positions[i] = ranked[i].position;
+      distances[i] = ranked[i].distance;
+      exact_distances[i] =
+          exact_distance(vectors + ranked[i].position * dimensions, query,
+                         dimensions);
+    }
+    return static_cast<std::int64_t>(ranked.size());
+  } catch (...) {
+    return -1;
+  }
 }
 
 MV_EXPORT int mv_has_fma() {
   return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma");
+}
+
+// Global int8 scalar quantization is used only as an ANN candidate filter.
+// The caller re-ranks candidates with the existing exact float32 kernel and
+// verifies returned distances in ordered double precision. Exact mode never
+// enters this structure. A global scale is selected because the benchmark
+// dimensions share the same distribution; callers disable this path when the
+// observed per-dimension spans are too uneven.
+struct Sq8Index {
+  std::uint64_t rows;
+  std::uint64_t dimensions;
+  float minimum;
+  float scale;
+  std::vector<std::uint8_t> codes;
+  std::vector<std::int32_t> norms;
+};
+
+__attribute__((target("avx2,fma"))) static inline std::int32_t
+sq8_dot(const std::uint8_t *__restrict row,
+        const std::uint8_t *__restrict query,
+        std::uint64_t dimensions) {
+  __m256i total = _mm256_setzero_si256();
+  std::uint64_t dimension = 0;
+  for (; dimension + 16 <= dimensions; dimension += 16) {
+    const __m128i row8 = _mm_loadu_si128(
+        reinterpret_cast<const __m128i *>(row + dimension));
+    const __m128i query8 = _mm_loadu_si128(
+        reinterpret_cast<const __m128i *>(query + dimension));
+    const __m256i row16 = _mm256_cvtepu8_epi16(row8);
+    const __m256i query16 = _mm256_cvtepu8_epi16(query8);
+    total = _mm256_add_epi32(total, _mm256_madd_epi16(row16, query16));
+  }
+  __m128i sum = _mm_add_epi32(_mm256_castsi256_si128(total),
+                              _mm256_extracti128_si256(total, 1));
+  sum = _mm_hadd_epi32(sum, sum);
+  sum = _mm_hadd_epi32(sum, sum);
+  std::int32_t result = _mm_cvtsi128_si32(sum);
+  for (; dimension < dimensions; ++dimension) {
+    result += static_cast<std::int32_t>(row[dimension]) * query[dimension];
+  }
+  return result;
+}
+
+MV_EXPORT void *mv_sq8_build(const float *vectors, std::uint64_t rows,
+                             std::uint64_t dimensions) noexcept {
+  if (!vectors || !rows || !dimensions || rows > SIZE_MAX / dimensions)
+    return nullptr;
+  try {
+    float minimum = vectors[0];
+    float maximum = vectors[0];
+    std::vector<float> dimension_minimums(
+        vectors, vectors + dimensions);
+    std::vector<float> dimension_maximums(
+        vectors, vectors + dimensions);
+    for (std::uint64_t row = 1; row < rows; ++row) {
+      const float *vector = vectors + row * dimensions;
+      for (std::uint64_t dimension = 0; dimension < dimensions; ++dimension) {
+        minimum = std::min(minimum, vector[dimension]);
+        maximum = std::max(maximum, vector[dimension]);
+        dimension_minimums[dimension] =
+            std::min(dimension_minimums[dimension], vector[dimension]);
+        dimension_maximums[dimension] =
+            std::max(dimension_maximums[dimension], vector[dimension]);
+      }
+    }
+    float minimum_span = std::numeric_limits<float>::infinity();
+    float maximum_span = 0.0f;
+    for (std::uint64_t dimension = 0; dimension < dimensions; ++dimension) {
+      const float span =
+          dimension_maximums[dimension] - dimension_minimums[dimension];
+      minimum_span = std::min(minimum_span, span);
+      maximum_span = std::max(maximum_span, span);
+    }
+    if (!(maximum_span > 0.0f) || maximum_span > minimum_span * 4.0f)
+      return nullptr;
+    const float scale =
+        maximum > minimum ? (maximum - minimum) / 255.0f : 1.0f;
+    auto *index = new Sq8Index{rows, dimensions, minimum, scale, {}, {}};
+    index->codes.resize(rows * dimensions);
+    index->norms.resize(rows);
+    for (std::uint64_t row = 0; row < rows; ++row) {
+      std::int32_t norm = 0;
+      for (std::uint64_t dimension = 0; dimension < dimensions; ++dimension) {
+        const std::uint64_t index_offset = row * dimensions + dimension;
+        const float quantized =
+            (vectors[index_offset] - minimum) / scale;
+        const std::uint8_t code = static_cast<std::uint8_t>(
+            std::max(0.0f, std::min(255.0f, std::nearbyint(quantized))));
+        index->codes[index_offset] = code;
+        norm += static_cast<std::int32_t>(code) * code;
+      }
+      index->norms[row] = norm;
+    }
+    return index;
+  } catch (...) {
+    return nullptr;
+  }
+}
+
+MV_EXPORT std::int64_t mv_sq8_search(
+    const float *vectors, const std::int64_t *keys, std::uint64_t rows,
+    std::uint64_t dimensions, void *opaque, const float *query,
+    const std::uint64_t *selection, std::uint64_t selected,
+    std::uint64_t candidates, std::uint64_t keep,
+    std::uint64_t *positions, double *distances,
+    double *exact_distances) noexcept {
+  auto *index = static_cast<Sq8Index *>(opaque);
+  if (!index || !vectors || !keys || !query || !positions || !distances ||
+      !exact_distances || index->rows != rows ||
+      index->dimensions != dimensions || !keep || (selection && !selected))
+    return -1;
+  try {
+    const std::uint64_t count = selection ? selected : rows;
+    candidates = std::max(keep, std::min(candidates, count));
+    std::vector<std::uint8_t> query_codes(dimensions);
+    std::int32_t query_norm = 0;
+    for (std::uint64_t dimension = 0; dimension < dimensions; ++dimension) {
+      const float quantized =
+          (query[dimension] - index->minimum) / index->scale;
+      const std::uint8_t code = static_cast<std::uint8_t>(
+          std::max(0.0f, std::min(255.0f, std::nearbyint(quantized))));
+      query_codes[dimension] = code;
+      query_norm += static_cast<std::int32_t>(code) * code;
+    }
+    std::priority_queue<std::pair<std::int32_t, std::uint64_t>> nearest;
+    for (std::uint64_t n = 0; n < count; ++n) {
+      const std::uint64_t row = selection ? selection[n] : n;
+      if (row >= rows) return -1;
+      const std::int32_t dot = sq8_dot(
+          index->codes.data() + row * dimensions, query_codes.data(),
+          dimensions);
+      const std::int32_t distance =
+          index->norms[row] + query_norm - 2 * dot;
+      if (nearest.size() < candidates) {
+        nearest.emplace(distance, row);
+      } else if (distance < nearest.top().first) {
+        nearest.pop();
+        nearest.emplace(distance, row);
+      }
+    }
+    std::vector<std::uint64_t> selected;
+    selected.reserve(nearest.size());
+    while (!nearest.empty()) {
+      selected.push_back(nearest.top().second);
+      nearest.pop();
+    }
+    std::vector<Candidate> ranked;
+    if (dimensions == 128) {
+      ranked = topk_scan_selection_range<distance_f32_bounded, 128>(
+          vectors, keys, selected.data(), 0, selected.size(), dimensions,
+          query, keep);
+    } else {
+      ranked = topk_scan_selection_range<distance_f32_bounded, 0>(
+          vectors, keys, selected.data(), 0, selected.size(), dimensions,
+          query, keep);
+    }
+    for (std::size_t i = 0; i < ranked.size(); ++i) {
+      positions[i] = ranked[i].position;
+      distances[i] = ranked[i].distance;
+      exact_distances[i] =
+          exact_distance(vectors + ranked[i].position * dimensions, query,
+                         dimensions);
+    }
+    return static_cast<std::int64_t>(ranked.size());
+  } catch (...) {
+    return -1;
+  }
+}
+
+MV_EXPORT void mv_sq8_free(void *opaque) noexcept {
+  delete static_cast<Sq8Index *>(opaque);
 }
 #else
 MV_EXPORT int mv_has_fma() { return 0; }

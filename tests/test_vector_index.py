@@ -7,6 +7,7 @@ import tracemalloc
 import unittest
 from array import array
 from pathlib import Path
+from unittest.mock import patch
 
 from minivectordb.engine import Engine
 from minivectordb.errors import DBError
@@ -89,6 +90,40 @@ class NativeIndexTests(unittest.TestCase):
         self.assertGreater(len(self.db.vector_indexes.filters), 0)
         self.db.execute("UPDATE t SET tag='gone' WHERE tag='g1'")
         self.assertEqual(self.compare_reference(sql), [])
+
+    def test_snapshot_precollects_filter_values_and_preserves_invalidation(self):
+        table = self.db.table('t')['id']
+        cache_key = (table, ((1, '=', 'g0'),))
+        self.assertIn(cache_key, self.db.vector_indexes.filters)
+        snapshot = self.db.vector_indexes.entries[table]
+
+        self.db.execute("UPDATE t SET v='[9,9,9,9]' WHERE id=0")
+        self.assertIs(self.db.vector_indexes.entries[table], snapshot)
+        self.assertIn(cache_key, self.db.vector_indexes.filters)
+
+        self.db.execute("UPDATE t SET tag='g9' WHERE id=0")
+        self.assertIs(self.db.vector_indexes.entries[table], snapshot)
+        self.assertNotIn(cache_key, self.db.vector_indexes.filters)
+
+        self.db.vector_indexes.invalidate(table)
+        self.db.vector_indexes.ensure(self.db.table('t'))
+        self.assertIn(cache_key, self.db.vector_indexes.filters)
+        self.db.execute("DELETE FROM t WHERE id=0")
+        self.assertNotIn(cache_key, self.db.vector_indexes.filters)
+
+    def test_precollection_shares_the_filter_budget_across_tables(self):
+        self.db.vector_indexes.filter_budget = 2048
+        self.db.vector_indexes.invalidate_filters()
+        for name in ('left', 'right'):
+            self.db.execute(
+                f'CREATE TABLE {name}(id BIGINT PRIMARY KEY,tag VARCHAR(8),v VECTOR(2))')
+            self.db.execute(
+                'INSERT INTO %s VALUES ' % name
+                + ','.join(f"({i},'g{i % 2}','[1,0]')" for i in range(30)))
+            self.db.execute(f'CREATE VECTOR INDEX {name}_vi ON {name}(v)')
+        self.assertLessEqual(
+            self.db.vector_indexes.filter_bytes,
+            self.db.vector_indexes.filter_budget)
 
     def test_grouped_equality_cache_tracks_transactions(self):
         query = lambda tag: "SELECT id FROM t WHERE tag='%s' ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 10" % tag
@@ -212,6 +247,57 @@ class NativeIndexTests(unittest.TestCase):
         self.db.execute("UPDATE t SET v='[9,9,9,9]' WHERE id=3")
         self.db.execute('COMMIT')
         self.assertEqual(self.compare_reference(sql), [(0,)])
+
+    def test_ann_sq8_candidates_preserve_exact_and_filtered_paths(self):
+        self.db.execute(
+            'CREATE TABLE ann(id BIGINT PRIMARY KEY,tag VARCHAR(8),v VECTOR(128))')
+        self.db.execute(
+            'INSERT INTO ann VALUES ' + ','.join(
+                f"({i},'g{i % 3}','{[((i + j) % 64) / 64 for j in range(128)]}')"
+                for i in range(64)))
+        with patch('minivectordb.vector_index.SQ8_MIN_ROWS', 8):
+            self.db.execute('CREATE VECTOR INDEX ann_vi ON ann(v)')
+        table = self.db.table('ann')['id']
+        snapshot = self.db.vector_indexes.entries[table]
+        self.assertIsNone(snapshot.sq8)
+        zero = json.dumps([0.0] * 128)
+        query = (
+            f"SELECT id,L2_DISTANCE(v,'{zero}') AS d "
+            "FROM ann ORDER BY d LIMIT 10")
+        filtered_query = (
+            "SELECT id FROM ann WHERE tag='g1' "
+            f"ORDER BY L2_DISTANCE(v,'{zero}') LIMIT 3")
+        exact = self.query(query)
+        filtered_exact = self.query(filtered_query)
+        self.db.mode = 'ann'
+        calls = []
+        search_sq8 = self.db.vector_indexes.kernel.search_sq8
+
+        def tracked(*args):
+            calls.append(args[2] is not None)
+            return search_sq8(*args)
+
+        self.db.vector_indexes.kernel.search_sq8 = tracked
+        try:
+            with patch.multiple(
+                    'minivectordb.vector_index',
+                    SQ8_MIN_ROWS=8,
+                    SQ8_FILTER_MIN_ROWS=8):
+                self.assertEqual(self.query(query), exact)
+                self.assertEqual(self.query(filtered_query), filtered_exact)
+            self.assertEqual(calls, [False, True])
+            self.assertIsNotNone(snapshot.sq8)
+        finally:
+            self.db.vector_indexes.kernel.search_sq8 = search_sq8
+        replacement = json.dumps([0.5] * 128)
+        with patch('minivectordb.vector_index.SQ8_MIN_ROWS', 8):
+            self.db.execute(f"UPDATE ann SET v='{replacement}' WHERE id=0")
+            self.query(query)
+        rebuilt = self.db.vector_indexes.entries[table]
+        self.assertIsNotNone(rebuilt.sq8)
+        self.db.execute('DELETE FROM ann WHERE id=1')
+        self.assertIsNone(self.db.vector_indexes.entries[table].sq8)
+        self.db.mode = 'exact'
 
     def test_small_vector_snapshot_stays_in_memory(self):
         self.compare_reference("SELECT id FROM t ORDER BY L2_DISTANCE(v,'[0,0,0,0]') LIMIT 5")
@@ -340,8 +426,9 @@ class StatementScannerTests(unittest.TestCase):
 
 class NativeParserTests(unittest.TestCase):
     def setUp(self):
-        from minivectordb.native import parse_vector
+        from minivectordb.native import parse_vector, parse_vectors
         self.parse_vector = parse_vector
+        self.parse_vectors = parse_vectors
         if parse_vector('[0,0]', 2) is None:
             self.skipTest('Native parser not built')
 
@@ -362,6 +449,23 @@ class NativeParserTests(unittest.TestCase):
                            ('[1,]', 1), ('[1]x', 1), ('1', 1), ('[]', 1), ('[1,2]', 1),
                            ('[1,2]', 3), ('["1"]', 1)):
             self.assertIsNone(self.parse_vector(text, size), text)
+
+    def test_batch_parser_matches_individual_parser(self):
+        texts = ['[0,1]', '[-0.0,1e-45]', '[16777217,3.4028235e38]']
+        self.assertEqual(
+            self.parse_vectors(texts, 2),
+            [self.parse_vector(text, 2) for text in texts])
+        parsed = self.parse_vectors(texts, 2)
+        parsed[0][0] = 9.0
+        self.assertEqual(parsed[1], self.parse_vector(texts[1], 2))
+        self.assertIsNone(self.parse_vectors(['[0,1]', '[01,2]'], 2))
+        many = [f'[{index}.25,{-index}.5]' for index in range(100)]
+        self.assertEqual(
+            self.parse_vectors(many, 2),
+            [self.parse_vector(text, 2) for text in many])
+        invalid_many = list(many)
+        invalid_many[53] = '[01,2]'
+        self.assertIsNone(self.parse_vectors(invalid_many, 2))
 
 
 class NativeMemoryTests(unittest.TestCase):

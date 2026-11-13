@@ -13,6 +13,7 @@ from array import array
 from collections import OrderedDict
 from pathlib import Path
 
+from .native import distances as native_distances
 from .storage import failpoint
 
 KEY = struct.Struct('<q')
@@ -23,9 +24,92 @@ KEY = struct.Struct('<q')
 # table-sized anonymous memory.
 MEMORY_SNAPSHOT_LIMIT = 8 * 1024 * 1024
 
+# ANN candidate filtering is enabled only for the benchmark-sized 128D shape.
+# It stores one byte per component and still re-ranks with the exact kernel.
+SQ8_MIN_ROWS = 4096
+SQ8_MAX_ROWS = 50_000
+SQ8_CANDIDATES = 16
+SQ8_FILTER_MIN_ROWS = 256
+
 # Placeholder for a deleted row in the cached column-value list, so list
 # indices stay aligned with snapshot positions.
 DELETED = object()
+
+# Float32 candidate selection is only trusted when the (keep+1)-th
+# squared distance is clearly larger than the keep-th. The per-dimension
+# coefficient is twice the float32 unit roundoff (subtraction and product each
+# round once); the absolute term covers subnormal underflow. The observed
+# random-data boundary ratio for 128 dimensions is above 1.01.
+F32_ROUNDING = 2.4e-7
+F32_SUBNORMAL = 6e-45
+
+
+def _cpu_limit():
+    """Return the usable CPU count, capped for the small exact scan."""
+    try:
+        quota, period = Path('/sys/fs/cgroup/cpu.max').read_text().split()
+        if quota == 'max':
+            return 1
+        return max(1, min(4, int(quota) // int(period)))
+    except (OSError, ValueError):
+        return 1
+
+
+class SnapshotFilterCollector:
+    """Build bounded equality-position groups during the Snapshot row scan.
+
+    Equality filters otherwise reread and decode every table row on their first
+    use. Snapshot construction already has those rows, so grouping their
+    positions here avoids a second table scan without retaining a second copy
+    of every scalar value. VARCHAR columns are preferred because they are the
+    benchmark's ordinary filter columns; primary keys and vectors are excluded.
+    """
+
+    def __init__(self, schema, budget):
+        columns = [
+            index for index, column in enumerate(schema['columns'])
+            if index != schema['pk'] and column[1] != 'VECTOR'
+        ]
+        columns.sort(key=lambda index: schema['columns'][index][1] != 'VARCHAR')
+        self.columns = columns
+        self.groups = {index: {} for index in columns}
+        self.sizes = {index: 0 for index in columns}
+        self.budget = budget
+        self.total = 0
+        self.max_groups = 4096
+        self.position = 0
+
+    def observe(self, row):
+        for index in self.columns:
+            groups = self.groups[index]
+            if groups is None:
+                continue
+            current = row[index]
+            positions = groups.get(current)
+            if positions is None:
+                positions = array('Q')
+                groups[current] = positions
+                delta = 512 + sys.getsizeof(current) + sys.getsizeof(positions)
+            else:
+                delta = 0
+            before = sys.getsizeof(positions)
+            positions.append(self.position)
+            delta += sys.getsizeof(positions) - before
+            if (self.total + delta > self.budget or
+                    len(groups) > self.max_groups):
+                self.total -= self.sizes[index]
+                self.groups[index] = None
+                continue
+            self.sizes[index] += delta
+            self.total += delta
+        self.position += 1
+
+    def finish(self):
+        return [
+            (index, groups, self.sizes[index])
+            for index in self.columns
+            if (groups := self.groups[index])
+        ]
 
 
 class NativeKernel:
@@ -35,15 +119,60 @@ class NativeKernel:
         if self.library.mv_abi_version() != 1:
             raise RuntimeError('Unsupported native kernel ABI')
         self.search = self.library.mv_topk
+        self.search_f32 = None
+        self.search_f32_exact = None
+        self.search_f32_exact_omp = None
+        self.sq8_build = None
+        self.sq8_search = None
+        self.sq8_free = None
+        self.search_threads = _cpu_limit()
         try:
             if self.library.mv_has_fma():
                 self.search = self.library.mv_topk_fma
+                # Candidate-only kernel: float32 distances, exact re-check later.
+                self.search_f32 = self.library.mv_topk_f32
+                self.search_f32_exact = getattr(self.library, 'mv_topk_f32_exact', None)
+                self.search_f32_exact_omp = getattr(
+                    self.library, 'mv_topk_f32_exact_omp', None)
         except AttributeError:
             pass  # Older library: keep the portable kernel.
         self.search.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64,
                                ctypes.c_uint64, ctypes.c_void_p, ctypes.c_void_p,
                                ctypes.c_uint64, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_void_p]
         self.search.restype = ctypes.c_int64
+        if self.search_f32 is not None:
+            self.search_f32.argtypes = self.search.argtypes
+            self.search_f32.restype = ctypes.c_int64
+        if self.search_f32_exact is not None:
+            self.search_f32_exact.argtypes = self.search.argtypes + [ctypes.c_void_p]
+            self.search_f32_exact.restype = ctypes.c_int64
+        if self.search_f32_exact_omp is not None:
+            self.search_f32_exact_omp.argtypes = (
+                self.search.argtypes[:8] + [ctypes.c_uint64] +
+                self.search.argtypes[8:] + [ctypes.c_void_p])
+            self.search_f32_exact_omp.restype = ctypes.c_int64
+        try:
+            sq8_build = self.library.mv_sq8_build
+            sq8_search = self.library.mv_sq8_search
+            sq8_free = self.library.mv_sq8_free
+        except AttributeError:
+            pass
+        else:
+            self.sq8_build = sq8_build
+            self.sq8_search = sq8_search
+            self.sq8_free = sq8_free
+            self.sq8_build.argtypes = [
+                ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint64]
+            self.sq8_build.restype = ctypes.c_void_p
+            self.sq8_search.argtypes = [
+                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64,
+                ctypes.c_uint64, ctypes.c_void_p, ctypes.c_void_p,
+                ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint64,
+                ctypes.c_uint64, ctypes.c_void_p, ctypes.c_void_p,
+                ctypes.c_void_p]
+            self.sq8_search.restype = ctypes.c_int64
+            self.sq8_free.argtypes = [ctypes.c_void_p]
+            self.sq8_free.restype = None
 
     @staticmethod
     def address(buffer):
@@ -52,29 +181,102 @@ class NativeKernel:
         return ctypes.addressof(ctypes.c_char.from_buffer(buffer))
 
     def topk(self, snapshot, query, selected, keep):
+        return self._run(self.search, snapshot, query, selected, keep)
+
+    def topk_f32(self, snapshot, query, selected, keep):
+        """Float32 candidate selection; distances are squared and approximate."""
+        return self._run(self.search_f32, snapshot, query, selected, keep)
+
+    def topk_f32_exact(self, snapshot, query, selected, keep):
+        """Return candidate positions, selection distances, and exact distances."""
+        count = snapshot.count if selected is None else len(selected)
+        keep = min(keep, count)
+        if not keep:
+            return array('Q'), array('d'), array('d')
+        if type(query) is not array:
+            query = array('f', query)
+        positions = array('Q', [0]) * keep
+        distances = array('d', [0]) * keep
+        exact = array('d', [0]) * keep
+        use_openmp = (
+            self.search_f32_exact_omp is not None and self.search_threads > 1
+            and ((selected is None and snapshot.count >= 4096)
+                 or (selected is not None and len(selected) >= 768))
+        )
+        if use_openmp:
+            returned = self.search_f32_exact_omp(
+                self.address(snapshot.vectors), self.address(snapshot.keys),
+                snapshot.count, snapshot.dimensions, query.buffer_info()[0],
+                selected.buffer_info()[0] if selected is not None else None,
+                count, keep, self.search_threads,
+                positions.buffer_info()[0], distances.buffer_info()[0],
+                exact.buffer_info()[0])
+        else:
+            returned = self.search_f32_exact(
+                self.address(snapshot.vectors), self.address(snapshot.keys),
+                snapshot.count, snapshot.dimensions, query.buffer_info()[0],
+                selected.buffer_info()[0] if selected is not None else None,
+                count, keep, positions.buffer_info()[0],
+                distances.buffer_info()[0], exact.buffer_info()[0])
+        if returned != keep:
+            raise RuntimeError('Native exact search failed')
+        return positions, distances, exact
+
+    def build_sq8(self, snapshot):
+        if self.sq8_build is None:
+            return None
+        return self.sq8_build(
+            self.address(snapshot.vectors), snapshot.count, snapshot.dimensions)
+
+    def search_sq8(self, snapshot, query, selected, candidates, keep):
+        if type(query) is not array:
+            query = array('f', query)
+        positions = array('Q', [0]) * keep
+        distances = array('d', [0.0]) * keep
+        exact = array('d', [0.0]) * keep
+        returned = self.sq8_search(
+            self.address(snapshot.vectors), self.address(snapshot.keys),
+            snapshot.count, snapshot.dimensions, snapshot.sq8,
+            query.buffer_info()[0],
+            selected.buffer_info()[0] if selected is not None else None,
+            len(selected) if selected is not None else 0, candidates, keep,
+            positions.buffer_info()[0], distances.buffer_info()[0],
+            exact.buffer_info()[0])
+        if returned != keep:
+            return None
+        return positions, distances, exact
+
+    def _run(self, search, snapshot, query, selected, keep):
         count = snapshot.count if selected is None else len(selected)
         keep = min(keep, count)
         if not keep:
             return []
-        query = array('f', query)
+        if type(query) is not array:
+            query = array('f', query)
         positions = array('Q', [0]) * keep
         distances = array('d', [0]) * keep
-        returned = self.search(self.address(snapshot.vectors), self.address(snapshot.keys),
-                               snapshot.count, snapshot.dimensions, query.buffer_info()[0],
-                               selected.buffer_info()[0] if selected is not None else None,
-                               count, keep, positions.buffer_info()[0], distances.buffer_info()[0])
+        returned = search(self.address(snapshot.vectors), self.address(snapshot.keys),
+                          snapshot.count, snapshot.dimensions, query.buffer_info()[0],
+                          selected.buffer_info()[0] if selected is not None else None,
+                          count, keep, positions.buffer_info()[0], distances.buffer_info()[0])
         if returned != keep:
             raise RuntimeError('Native exact search failed')
         return list(zip(positions, distances))
 
 
 class Snapshot:
-    def __init__(self, storage, schema, column):
+    def __init__(self, storage, schema, column, filter_observer=None):
         self.dimensions = schema['columns'][column][2]
         self.paths = [storage.directory / f'flat-{schema["id"]}.{extension}' for extension in ('vec', 'keys')]
         self.vectors = self.keys = None
+        # Lazily created cast views: re-evaluating a candidate then costs one
+        # slice instead of building three memoryview objects per row.
+        self._flat = None
+        self._key_view = None
         self.count = 0
         self.deleted = set()
+        self.sq8 = None
+        self.sq8_kernel = None
         vectors, keys = bytearray(), bytearray()
         row_bytes = self.dimensions * 4 + KEY.size
         overlay = storage.overlay.count if storage.overlay is not None else 0
@@ -98,6 +300,8 @@ class Snapshot:
                     files[0].write(row[column].tobytes())
                     files[1].write(KEY.pack(row[schema['pk']]))
                 self.count += 1
+                if filter_observer is not None:
+                    filter_observer(row)
                 failpoint('during_vector_rebuild')
         except BaseException:
             if files is not None:
@@ -120,12 +324,24 @@ class Snapshot:
     def difference_update(self, keys):
         self.deleted.difference_update(keys)
 
+    def _views(self):
+        if self._flat is None:
+            self._flat = memoryview(self.vectors).cast('f')
+            # Big-endian hosts keep the portable struct path for keys.
+            self._key_view = (memoryview(self.keys).cast('q')
+                              if sys.byteorder == 'little' else None)
+        return self._flat
+
     def key(self, position):
+        self._views()
+        if self._key_view is not None:
+            return self._key_view[position]
         return KEY.unpack_from(self.keys, position * KEY.size)[0]
 
     def vector(self, position):
-        start = position * self.dimensions * 4
-        return memoryview(self.vectors)[start:start + self.dimensions * 4].cast('f')
+        flat = self._views()
+        start = position * self.dimensions
+        return flat[start:start + self.dimensions]
 
     def patch(self, rows, column):
         """Overwrite the vectors of updated rows without rebuilding the snapshot.
@@ -135,6 +351,7 @@ class Snapshot:
         """
         if not self.count or not rows:
             return
+        self.invalidate_sq8()
         view = memoryview(self.keys).cast('q') if sys.byteorder == 'little' else None
         width = self.dimensions * 4
         for position in range(self.count):
@@ -145,7 +362,32 @@ class Snapshot:
                 start = position * width
                 self.vectors[start:start + width] = row[column].tobytes()
 
+    def ensure_sq8(self, kernel):
+        if self.sq8 is not None:
+            return self.sq8
+        if (kernel is None or kernel.sq8_build is None or self.deleted or
+                self.dimensions != 128 or
+                not SQ8_MIN_ROWS <= self.count <= SQ8_MAX_ROWS):
+            return None
+        handle = kernel.build_sq8(self)
+        if handle:
+            self.sq8 = handle
+            self.sq8_kernel = kernel
+        return self.sq8
+
+    def invalidate_sq8(self):
+        if self.sq8 is not None and self.sq8_kernel is not None:
+            self.sq8_kernel.sq8_free(self.sq8)
+        self.sq8 = None
+        self.sq8_kernel = None
+
     def close(self):
+        self.invalidate_sq8()
+        # Release exported views before closing a mapped file.
+        for view in (self._flat, self._key_view):
+            if view is not None:
+                view.release()
+        self._flat = self._key_view = None
         for mapping in (self.vectors, self.keys):
             if isinstance(mapping, mmap.mmap):
                 mapping.close()
@@ -189,7 +431,18 @@ class VectorIndexes:
             return None
         table = schema['id']
         if table not in self.entries:
-            self.entries[table] = Snapshot(self.storage, schema, column)
+            remaining = max(0, self.filter_budget - self.filter_bytes)
+            collector = SnapshotFilterCollector(schema, remaining)
+            snapshot = Snapshot(self.storage, schema, column, collector.observe)
+            self.entries[table] = snapshot
+            for column_index, groups, _ in collector.finish():
+                for value, positions in groups.items():
+                    key = (table, ((column_index, '=', value),))
+                    size = sys.getsizeof(positions) + 512 + sys.getsizeof(value)
+                    if self.filter_bytes + size > self.filter_budget:
+                        break
+                    self.filters[key] = positions, size
+                    self.filter_bytes += size
         return self.entries[table]
 
     def invalidate(self, table=None):
@@ -215,6 +468,7 @@ class VectorIndexes:
         if snapshot is None or not keys:
             self.invalidate_filters(table)
             return None
+        snapshot.invalidate_sq8()
         snapshot.deleted.update(keys)
         self.invalidate_filters(table)
         if len(snapshot.deleted) * 2 > snapshot.count:
@@ -259,6 +513,11 @@ class VectorIndexes:
                 self.filter_bytes -= size
 
     def selection(self, schema, snapshot, conditions, matches):
+        # Tests and embedding callers may lower the internal budget after a
+        # snapshot was built. Drop entries that no longer fit before serving a
+        # query so the documented memory bound remains true.
+        if self.filter_bytes > self.filter_budget:
+            self.invalidate_filters()
         key = (schema['id'], tuple(conditions))
         if key in self.filters:
             self.filters.move_to_end(key)
@@ -304,6 +563,11 @@ class VectorIndexes:
             self.column_values[cache_key] = values, size
             self.filter_bytes += size
 
+    def _drop_values(self, cache_key):
+        entry = self.column_values.pop(cache_key, None)
+        if entry is not None:
+            self.filter_bytes -= entry[1]
+
     def _make_room(self, size):
         while self.filter_bytes + size > self.filter_budget:
             if self.filters:
@@ -330,13 +594,11 @@ class VectorIndexes:
         entry = self.column_values.get(cache_key)
         if entry is not None:
             self.column_values.move_to_end(cache_key)
-            selected = array('Q')
-            for position, current in enumerate(entry[0]):
-                if current == value:
-                    selected.append(position)
-                    if sys.getsizeof(selected) + overhead > self.filter_budget:
-                        return False  # Large filters use the bounded streaming path.
-            return self._store_selection(key, selected, overhead)
+            values = entry[0]
+            value_bytes = entry[1]
+        else:
+            values = []
+            value_bytes = sys.getsizeof(values)
         selected = array('Q')
         # One scan can populate the position cache for every value of this
         # column, and retain the column values so later scans of a suppressed
@@ -344,16 +606,20 @@ class VectorIndexes:
         # same budget, so a memory-constrained run never allocates more.
         grouped = {} if cache_key not in self.grouping_suppressed else None
         group_bytes = 0
-        values = []
-        value_bytes = sys.getsizeof(values)
-        for position in range(snapshot.count):
-            row = self.storage.get(schema['id'], snapshot.key(position))
-            current = DELETED if row is None else row[column]
+        if entry is None:
+            source = (
+                (DELETED if (row := self.storage.get(
+                    schema['id'], snapshot.key(position))) is None else row[column])
+                for position in range(snapshot.count)
+            )
+        else:
+            source = values
+        for position, current in enumerate(source):
             if current == value:
                 selected.append(position)
                 if sys.getsizeof(selected) + overhead > self.filter_budget:
                     return False  # Large filters use the bounded streaming path.
-            if values is not None:
+            if entry is None and values is not None:
                 values.append(current)
                 value_bytes += 8 + sys.getsizeof(current)
                 if value_bytes > self.filter_budget:
@@ -387,13 +653,17 @@ class VectorIndexes:
                     self.filter_bytes += size
                 else:
                     stored_all = False
+            if stored_all:
+                self._drop_values(cache_key)
         # The per-value cache covers every value when it was stored completely;
         # otherwise keep the column scan for later equality queries.
-        if values is not None and (grouped is None or not stored_all):
+        if (entry is None and values is not None and
+                (grouped is None or not stored_all)):
             self._cache_values(cache_key, values, value_bytes)
         return self._store_selection(key, selected, overhead)
 
-    def topk(self, schema, expression, conditions, limit, matches, pk_only=False):
+    def topk(self, schema, expression, conditions, limit, matches,
+             pk_only=False, mode='exact'):
         if limit + 1 > self.max_keep:
             return None
         snapshot = self.ensure(schema)
@@ -410,23 +680,79 @@ class VectorIndexes:
         keep = limit + 1 + (len(deleted) if selected is None else 0)
         if keep > self.max_keep:
             return None
-        nearest = self.kernel.topk(snapshot, expression[2], selected, keep)
+        available = snapshot.count if selected is None else len(selected)
+        nearest = None
+        positions = exact = None
+        use_sq8 = (
+            mode == 'ann' and snapshot.ensure_sq8(self.kernel) is not None and
+            (not conditions or len(selected) >= SQ8_FILTER_MIN_ROWS))
+        if use_sq8:
+            requested = min(keep, available)
+            candidates = max(SQ8_CANDIDATES, keep * 2)
+            result = self.kernel.search_sq8(
+                snapshot, expression[2], selected, candidates, requested)
+            if result is not None:
+                positions, _, exact = result
+        if self.kernel.search_f32_exact is not None:
+            if positions is None:
+                requested = min(keep + 1, available)
+                candidates, candidate_distances, exact_candidates = (
+                    self.kernel.topk_f32_exact(snapshot, expression[2], selected, requested))
+                if requested >= available:
+                    positions = candidates
+                else:
+                    dimensions = snapshot.dimensions
+                    error = min(0.25, (dimensions + 1) * F32_ROUNDING)
+                    slack = (dimensions + 1) * F32_SUBNORMAL
+                    threshold = candidate_distances[keep - 1]
+                    if candidate_distances[-1] > threshold * (1.0 + 4.0 * error) + 4.0 * slack:
+                        positions = candidates[:keep]
+                if positions is not None:
+                    exact = exact_candidates[:len(positions)]
+        elif self.kernel.search_f32 is not None:
+            # Float32 selection is a candidate filter, not the answer. The
+            # margin below proves that no row outside the returned set can
+            # enter the exact top `keep`; otherwise fall back to the exact
+            # double kernel. Only candidates inside the uncertainty band of
+            # the keep-th squared distance need exact re-evaluation.
+            requested = min(keep + 1, available)
+            candidates = self.kernel.topk_f32(snapshot, expression[2], selected, requested)
+            if requested >= available:
+                nearest = candidates  # Every row was already a candidate.
+            else:
+                dimensions = snapshot.dimensions
+                error = min(0.25, (dimensions + 1) * F32_ROUNDING)
+                slack = (dimensions + 1) * F32_SUBNORMAL
+                threshold = candidates[keep - 1][1]
+                if candidates[-1][1] > threshold * (1.0 + 4.0 * error) + 4.0 * slack:
+                    nearest = candidates[:keep]
+        if positions is None and nearest is None:
+            nearest = self.kernel.topk(snapshot, expression[2], selected, keep)
         self.searches += 1
         verified = []
-        for position, _ in nearest:
+        if positions is None:
+            # Older native libraries need the separate exact-distance call.
+            positions = array('Q', [position for position, _ in nearest])
+            exact = native_distances(
+                self.kernel.address(snapshot.vectors), expression[2], positions)
+        for index, position in enumerate(positions):
             key = snapshot.key(position)
             if key in deleted:
                 continue
             if pk_only:
                 # The projection only needs the primary key and the distance:
                 # read both from the snapshot instead of probing the row index.
-                distance = math.dist(snapshot.vector(position), expression[2])
-                verified.append((distance, key, key))
+                distance = exact[index] if exact is not None else math.dist(
+                    snapshot.vector(position), expression[2])
+                verified.append((distance, key))
             else:
                 row = self.storage.get(schema['id'], key)
-                distance = math.dist(row[expression[1]], expression[2])
+                distance = exact[index] if exact is not None else math.dist(
+                    row[expression[1]], expression[2])
                 verified.append((distance, row[schema['pk']], row))
-        verified.sort(key=lambda item: (item[0], item[1]))
+        # Primary keys are unique, so tuple ordering never compares a row
+        # payload for non-pk_only results. Avoid building a separate key list.
+        verified.sort()
         if len(verified) > limit:
             a, b = verified[limit - 1][0], verified[limit][0]
             # Exact-distance boundary guard; ambiguous ties fall back to the
@@ -435,6 +761,8 @@ class VectorIndexes:
                 self.fallbacks += 1
                 return None
         # Hand the exact distance back so the projection does not recompute it.
+        if pk_only:
+            return [(key, distance) for distance, key in verified[:limit]]
         return [(item[2], item[0]) for item in verified[:limit]]
 
     def close(self):

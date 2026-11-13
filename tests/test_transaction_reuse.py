@@ -58,14 +58,27 @@ class TransactionReuseTests(unittest.TestCase):
             self.assertIsNone(self.db.storage.overlay.get(1, 99))
         self.assertEqual(len(list(self.db.execute('SELECT id FROM t').rows)), 5)
 
-    def test_stage_file_survives_between_transactions_for_reuse(self):
+    def test_stage_handle_survives_between_transactions_for_reuse(self):
         self.db.execute('CREATE TABLE t(id BIGINT PRIMARY KEY,v VECTOR(2))')
         self.db.execute("INSERT INTO t VALUES (1,'[1,0]')")
-        # The reused handles stay open; the files exist while the engine runs.
+        # The stage handle stays open; small transactions remain in memory.
         self.assertIsNotNone(self.db.storage.stage)
         self.assertTrue(self.db.storage.active is False)
         self.db.execute("INSERT INTO t VALUES (2,'[2,0]')")
         self.assertEqual(len(list(self.db.execute('SELECT id FROM t').rows)), 2)
+
+    def test_large_stage_spills_under_data_directory_and_returns_to_memory(self):
+        self.db.execute('CREATE TABLE t(id BIGINT PRIMARY KEY,v VARCHAR(256))')
+        payload = 'x' * 200
+        self.db.execute('BEGIN')
+        for i in range(9000):
+            self.db.execute(f"INSERT INTO t VALUES ({i},'{payload}{i:08d}')")
+        stage = self.db.storage.stage
+        self.assertTrue(getattr(stage, '_rolled', False))
+        self.assertGreater(stage.tell(), 512 * 1024)
+        self.db.execute('COMMIT')
+        self.assertFalse(getattr(self.db.storage.stage, '_rolled', True))
+        self.assertEqual(self.db.storage.stage.tell(), 0)
 
     def test_close_releases_and_removes_scratch_files(self):
         self.db.execute('CREATE TABLE t(id BIGINT PRIMARY KEY,v VECTOR(2))')

@@ -4,8 +4,20 @@ import sys
 import tempfile
 import unittest
 
+from minivectordb.json_protocol import _parse_fast_execute
+
 
 class JsonProtocolTests(unittest.TestCase):
+    def test_fast_execute_parser_only_accepts_canonical_requests(self):
+        line = ('{"id":17,"op":"execute","sql":"SELECT id FROM t WHERE id=1",'
+                '"search_mode":"exact"}')
+        self.assertEqual(_parse_fast_execute(line),
+                         (17, 'SELECT id FROM t WHERE id=1', 'exact'))
+        self.assertIsNone(_parse_fast_execute(' ' + line))
+        self.assertIsNone(_parse_fast_execute(line.replace('"id":17', '"id":"17"')))
+        self.assertIsNone(_parse_fast_execute(line.replace('WHERE id=1', 'WHERE id=\\\\1')))
+        self.assertIsNone(_parse_fast_execute(line.replace('"exact"', '"other"')))
+
     def test_requests_transactions_modes_and_shutdown(self):
         with tempfile.TemporaryDirectory() as directory:
             p = subprocess.Popen([sys.executable, '-m', 'minivectordb', '--wire', 'jsonl',
@@ -30,6 +42,14 @@ class JsonProtocolTests(unittest.TestCase):
                 self.assertFalse(request(6, "INSERT INTO t VALUES (9007199254740993,'[0,0]')")['ok'])
                 self.assertTrue(request(7, 'ROLLBACK')['ok'])
                 self.assertEqual(request(8, 'SELECT v FROM t')['rows'], [[[1.0, 0.0]]])
+                rows = ','.join("(%d,'[0,0]')" % ident for ident in range(1, 66))
+                self.assertEqual(
+                    request(9, 'INSERT INTO t VALUES ' + rows)['affected_rows'], 65)
+                result = request(
+                    10, 'SELECT id FROM t ORDER BY id LIMIT 70')
+                self.assertEqual(
+                    [row[0] for row in result['rows']],
+                    list(range(1, 66)) + [9007199254740993])
                 p.stdin.write(json.dumps({'id': 'end', 'op': 'shutdown'}) + '\n')
                 p.stdin.flush()
                 self.assertEqual(json.loads(p.stdout.readline()), {'id': 'end', 'ok': True})

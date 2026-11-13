@@ -9,6 +9,7 @@ import os
 import pickle
 import struct
 import sys
+import tempfile
 import zlib
 from array import array
 from collections import OrderedDict
@@ -20,6 +21,7 @@ TRAILER = struct.Struct('<4sQ')
 LENGTH = struct.Struct('<I')
 SLOT = struct.Struct('<qqq')  # table id (zero means unused), primary key, signed offset
 MASK64 = (1 << 64) - 1
+STAGE_MEMORY = 512 * 1024
 
 
 def sync_directory(path):
@@ -402,7 +404,7 @@ class Storage:
             sync_directory(self.directory)
         self.recover()
         # Names below are owned by this implementation, never user SQL paths.
-        for pattern in ('sort-*.tmp', 'modify-*.tmp'):
+        for pattern in ('sort-*.tmp', 'modify-*.tmp', 'transaction-stage-*'):
             for path in self.directory.glob(pattern):
                 path.unlink()
         leftovers = ['transaction.stage', 'transaction.idx', 'transaction.idx.resize',
@@ -443,9 +445,12 @@ class Storage:
                 self._apply(record, offset, self.index, length)
                 failpoint('during_recovery')
             position = end + TRAILER.size
-        self.wal.truncate(position)
         self.wal.seek(position)
-        os.fsync(self.wal.fileno())
+        if position != size:
+            # Only an incomplete tail needs a durable truncation. A clean WAL
+            # is already authoritative and should not create startup I/O.
+            self.wal.truncate(position)
+            os.fsync(self.wal.fileno())
 
     def _apply(self, record, offset, index, length=None):
         if record[0] == 'schema':
@@ -472,10 +477,11 @@ class Storage:
         self.base_schemas = copy.deepcopy(self.schemas)
         self.active = True
         if self.stage is None:
-            # The stage is scratch: never authoritative, never synced, and
-            # startup unlinks any crash leftover. Keep one file open across
-            # transactions instead of paying open/close/unlink per statement.
-            self.stage = open(self.directory / 'transaction.stage', 'w+b', buffering=0)
+            # Small transactions stay in memory; a large stage spills to a
+            # temporary file under the measured data directory.
+            self.stage = tempfile.SpooledTemporaryFile(
+                max_size=STAGE_MEMORY, mode='w+b', dir=self.directory,
+                prefix='transaction-stage-')
         else:
             self.stage.truncate(0)
             self.stage.seek(0)
@@ -578,16 +584,16 @@ class Storage:
         self._finish()
 
     def _finish(self):
-        # Keep the stage file and overlay mapping open for the next begin();
-        # both are scratch state, never authoritative. Clear the overlay now
-        # so no reader can see this transaction's staged entries afterwards;
-        # begin() resets both again. A transaction that grew the overlay
-        # shrinks it back to the initial capacity so later small
-        # transactions do not keep zeroing (and resident-tracking) a large
-        # mapping. Storage.close() releases the files, and startup unlinks
-        # crash leftovers.
+        # Return the stage to its in-memory form after a large transaction.
+        # The overlay is scratch state too; shrink it so later small
+        # transactions do not keep zeroing and resident-tracking a large map.
         self.active = False
         self.base_schemas = None
+        if self.stage is not None:
+            self.stage.close()
+            self.stage = tempfile.SpooledTemporaryFile(
+                max_size=STAGE_MEMORY, mode='w+b', dir=self.directory,
+                prefix='transaction-stage-')
         if self.overlay is not None:
             if self.overlay.capacity > self.overlay_initial_capacity:
                 self.overlay.close()
@@ -682,5 +688,7 @@ class Storage:
             self.overlay = None
         for name in ('transaction.stage', 'transaction.idx'):
             (self.directory / name).unlink(missing_ok=True)
+        for path in self.directory.glob('transaction-stage-*'):
+            path.unlink(missing_ok=True)
         self.index.close()
         self.wal.close()

@@ -1,5 +1,35 @@
 # MiniVectorDB 优化与验证记录
 
+2026-11-13 的 64 维检查点热循环拆分、9 轮内核 A/B、五种子共 35 对 JSONL 端到端 A/B 和完整资源回归见 [split-checkpoint-topk-20261113.md](split-checkpoint-topk-20261113.md)。
+
+2026-11-13 的 128 维有界 exact TopK 候选扫描、被拒绝的多检查点版本、三组多种子 JSONL 端到端 A/B、差分测试和 64 MiB 生命周期验证见 [partial-bound-exact-20261113.md](partial-bound-exact-20261113.md)。
+
+2026-11-13 的显式 ANN SQ8 点积候选扫描、同进程内核 A/B、三组多种子 JSONL 端到端 A/B、Recall@10、写入与内存影响见 [sq8-dot-20261113.md](sq8-dot-20261113.md)。
+
+2026-11-13 的 ANN 显式模式、不同随机种子下的 8 对 JSONL 端到端 A/B、Recall@10 和资源对照见 [ann-mode-validation-20261113.md](ann-mode-validation-20261113.md)。
+
+2026-11-13 的批量向量 OpenMP 解析、原生微基准、21 对持久化写入 A/B、完整回归和 64 MiB 超内存验证见 [openmp-vector-parse-20261113.md](openmp-vector-parse-20261113.md)。
+
+2026-11-13 的干净 WAL 恢复、启动写入减少 4 KiB、两组重启 A/B 和完整资源回归见 [clean-wal-recovery-20261113.md](clean-wal-recovery-20261113.md)。
+
+2026-11-13 的批量向量解析切片复制消除、两组各 21 对写入 A/B 和完整资源回归见 [batch-vector-parse-slice-20261113.md](batch-vector-parse-slice-20261113.md)。
+
+2026-11-13 的 TopK 结果物化、原生 tuple 排序、SELECT 投影直出、三组多种子 A/B 和完整资源回归见 [python-topk-materialization-20261113.md](python-topk-materialization-20261113.md)。
+
+2026-11-13 的按 cgroup CPU 配额启用 exact TopK 并行扫描、无过滤与大过滤集的原生内核 A/B、两组容器内交替对照、宿主侧 JSONL 对照及完整正确性回归见 [openmp-exact-20261113.md](openmp-exact-20261113.md)。
+
+2026-11-13 的小事务内存暂存、大事务 512 KiB 溢写、WAL 持久化边界、14 对写入 A/B 和 64 MiB 压力验证见 [transaction-stage-memory-20261113.md](transaction-stage-memory-20261113.md)。
+
+2026-11-13 的过滤 128 维特化、`fdatasync`、WAL 映射复制和两列 JSON 行格式化拒绝实验及判定依据见 [optimization-rejections-20261113.md](optimization-rejections-20261113.md)。
+
+2026-11-13 的 TopK JSONL 小结果单次写、7 对端到端交替对照、64 行分块边界反例和完整资源回归见 [json-output-batching-20261113.md](json-output-batching-20261113.md)。
+
+2026-11-13 的规范多行 INSERT 解析快路径、通用解析器 A/B、7 轮端到端写入对照和完整资源回归见 [insert-fast-path-20261113.md](insert-fast-path-20261113.md)。
+
+2026-11-13 的小 K 有序候选收集器、同进程内核／完整 TopK A/B、同一数据卷 7 轮端到端对照及完整资源回归见 [sorted-small-k-20261113.md](sorted-small-k-20261113.md)。
+
+2026-11-13 的快照等值分组预收集实验、1,000 次查询对照、64 MiB 超内存验证和已拒绝的原始值缓存方案见 [precollect-filter-groups-20261113.md](precollect-filter-groups-20261113.md)。
+
 最新公开 v4 题包的 20 组验证、106 项回归和镜像恢复结果见 [public-v4-validation.md](public-v4-validation.md)。此前用户报告正式提测未通过，具体原因未获日志确认；本地验证不代表正式准入。
 
 本文件保留上一版实验；当前源码已进一步优化索引失效。最新 72 项测试、独立容器三轮测量与超内存向量验证见 [r3-optimization.md](r3-optimization.md)。下文历史报告关联提交 `491f7611579dfc1f52e054dc376c22f89e72394e`，不再作为当前源码性能结果。
