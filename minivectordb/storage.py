@@ -145,6 +145,13 @@ class DiskHash:
         self.extents[table] = low, high
 
     def entries(self, table=None):
+        if self.view is not None:
+            view = self.view
+            for base in range(0, len(view), 3):
+                t = view[base]
+                if t and (table is None or table == t):
+                    yield t, view[base + 1], view[base + 2]
+            return
         for i in range(self.capacity):
             t, key, value = SLOT.unpack_from(self.map, i * SLOT.size)
             if t and (table is None or table == t):
@@ -373,6 +380,80 @@ def records_buffered(file, start, end):
         position = payload_start + length
 
 
+def _row_metadata(payload):
+    """Return ('rowmeta', table, key, live) without materializing row values."""
+    if len(payload) < 18:
+        raise RuntimeError('Truncated compact row')
+    live = payload[1] != 0
+    table, key = struct.unpack_from('<qq', payload, 2)
+    if not live:
+        return ('rowmeta', table, key, False)
+    if len(payload) < 22:
+        raise RuntimeError('Truncated compact row header')
+    count, = struct.unpack_from('<I', payload, 18)
+    offset = 22
+    for _ in range(count):
+        if offset >= len(payload):
+            raise RuntimeError('Truncated compact row value')
+        kind = payload[offset]
+        offset += 1
+        if kind == 0:
+            continue
+        if kind == 1:
+            offset += 8
+        elif kind == 2:
+            if offset + 4 > len(payload):
+                raise RuntimeError('Truncated compact string length')
+            length, = struct.unpack_from('<I', payload, offset)
+            offset += 4 + length
+        elif kind == 3:
+            if offset + 4 > len(payload):
+                raise RuntimeError('Truncated compact vector length')
+            length, = struct.unpack_from('<I', payload, offset)
+            offset += 4 + 4 * length
+        else:
+            raise RuntimeError('Invalid row value type')
+        if offset > len(payload):
+            raise RuntimeError('Truncated compact row value')
+    return ('rowmeta', table, key, True)
+
+
+def records_metadata(file, start, end):
+    """Scan records for recovery without decoding compact row payloads."""
+    position = start
+    block = b''
+    base = start
+    while position < end:
+        if position + LENGTH.size > base + len(block):
+            file.seek(position)
+            block = file.read(min(RECORD_BLOCK, end - position))
+            base = position
+            if len(block) < LENGTH.size:
+                raise RuntimeError('Truncated record length')
+        offset_in_block = position - base
+        length, = LENGTH.unpack_from(block, offset_in_block)
+        payload_start = position + LENGTH.size
+        if payload_start + length > end:
+            raise RuntimeError('Record crosses transaction boundary')
+        if payload_start + length > base + len(block):
+            file.seek(payload_start)
+            payload = file.read(length)
+            if len(payload) != length:
+                raise RuntimeError('Truncated record')
+        else:
+            payload = block[offset_in_block + LENGTH.size:
+                            offset_in_block + LENGTH.size + length]
+        kind = payload[:1]
+        if kind == b'\x01':
+            record = _row_metadata(payload)
+        elif kind == b'\x00':
+            record = pickle.loads(payload[1:])
+        else:
+            record = pickle.loads(payload)
+        yield position, record, length
+        position = payload_start + length
+
+
 class Storage:
     def __init__(self, directory, cache_memory=16 * 1024 * 1024, checkpoint_bytes=64 * 1024 * 1024):
         self.directory = Path(directory)
@@ -441,7 +522,7 @@ class Storage:
                 remaining -= len(chunk)
             if crc != checksum:
                 raise RuntimeError('WAL checksum mismatch')
-            for offset, record, length in records_buffered(self.wal, start, end):
+            for offset, record, length in records_metadata(self.wal, start, end):
                 self._apply(record, offset, self.index, length)
                 failpoint('during_recovery')
             position = end + TRAILER.size
@@ -455,6 +536,18 @@ class Storage:
     def _apply(self, record, offset, index, length=None):
         if record[0] == 'schema':
             self.schemas[record[1]] = record[2]
+        elif record[0] == 'rowmeta':
+            _, table, key, live = record
+            value = offset + 1 if live else -(offset + 1)
+            if index is self.index:
+                old = index.replace(table, key, value)
+                if old is not None and old > 0:
+                    self.wal.seek(old - 1)
+                    self.live_bytes -= LENGTH.unpack(self.wal.read(LENGTH.size))[0] + LENGTH.size
+                if live:
+                    self.live_bytes += length + LENGTH.size
+            else:
+                index.put(table, key, value)
         else:
             _, table, key, row = record
             value = offset + 1 if row is not None else -(offset + 1)
@@ -602,7 +695,8 @@ class Storage:
                 self.overlay.reset()
 
     def get(self, table, key):
-        offset = self.overlay.get(table, key) if self.overlay is not None else None
+        offset = (self.overlay.get(table, key)
+                  if self.active and self.overlay is not None else None)
         file = self.stage
         if offset is None:
             offset = self.index.get(table, key)
@@ -631,13 +725,14 @@ class Storage:
 
     def rows(self, table):
         for _, key, offset in self.index.entries(table):
-            staged = self.overlay.get(table, key) if self.overlay is not None else None
+            staged = (self.overlay.get(table, key)
+                      if self.active and self.overlay is not None else None)
             if staged is not None:
                 if staged > 0:
                     yield self.read_row(self.stage, staged - 1)
             elif offset > 0:
                 yield self.read_row(self.wal, offset - 1)
-        if self.overlay is not None:
+        if self.active and self.overlay is not None:
             for _, key, offset in self.overlay.entries(table):
                 if offset > 0 and self.index.get(table, key) is None:
                     yield self.read_row(self.stage, offset - 1)

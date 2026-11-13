@@ -1,5 +1,7 @@
 # MiniVectorDB 优化与验证记录
 
+2026-11-13 的恢复期行元数据扫描、隔离恢复 A/B、186 项回归、20/20 公开协议和 64 MiB 超内存验证见 [recovery-metadata-20261113.md](recovery-metadata-20261113.md)。
+
 2026-11-13 的 64 维检查点热循环拆分、9 轮内核 A/B、五种子共 35 对 JSONL 端到端 A/B 和完整资源回归见 [split-checkpoint-topk-20261113.md](split-checkpoint-topk-20261113.md)。
 
 2026-11-13 的 128 维有界 exact TopK 候选扫描、被拒绝的多检查点版本、三组多种子 JSONL 端到端 A/B、差分测试和 64 MiB 生命周期验证见 [partial-bound-exact-20261113.md](partial-bound-exact-20261113.md)。

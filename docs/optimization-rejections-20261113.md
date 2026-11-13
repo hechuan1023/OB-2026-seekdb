@@ -480,3 +480,57 @@ was reverted and the experiment is recorded here.
   `sq8-dot-20261113.md`.
 - Clean-WAL recovery skips the unconditional startup truncate/`fsync`; see
   `clean-wal-recovery-20261113.md`.
+
+## Sequential snapshot reads for committed single-table indexes
+
+The vector snapshot builder was changed to read every committed single-table
+index through `snapshot_rows()` instead of the committed-row cache. The intent
+was to avoid retaining full vector rows in the random-access cache while the
+snapshot already holds the same vectors.
+
+Twelve repeated snapshot rebuilds measured a median of 25.7-26.8 ms with the
+existing path and 27.3-30.2 ms with sequential reads. Three end-to-end seeds
+with five alternating pairs each showed a stable peak-memory reduction of about
+6%, but durable writes regressed in every seed (paired median ratios 1.0095 to
+1.0278) and query direction changed across seeds. The change was reverted
+because the memory reduction did not justify the write and rebuild regression.
+
+## WAL block reservation with `fallocate`
+
+Linux `fallocate(FALLOC_FL_KEEP_SIZE)` was used to reserve 16 MiB of WAL blocks
+without changing the logical file size. An isolated 100-commit probe improved
+from 0.352-0.405 s to 0.334-0.375 s across three pairs, but the gain did not
+survive the complete database path.
+
+Three seeds with five AB pairs each produced mixed write directions. Seven
+additional reverse-order BA pairs measured a 1.0074 candidate/baseline write
+ratio, while the earlier AB run measured 0.9943. Query direction reversed with
+execution order, showing that the apparent query change was host noise. Peak
+memory increased by about 0.08% in the reverse-order run. The reservation code
+was reverted because it did not provide a stable end-to-end improvement.
+
+## Persistent native worker for exact TopK
+
+A custom native pool kept one worker thread alive between queries while the
+caller scanned the other half of the table. The prototype used the same
+float32 candidate kernel, sorted merge, exact-distance verification and
+primary-key tie-break as the retained OpenMP path.
+
+On 1,000 alternating same-process queries, every returned position and exact
+distance matched. The pool was nevertheless slower than the existing OpenMP
+path: 0.112887 s versus 0.076698 s overall (median paired ratio 1.846), with
+filtered queries at 2.301 and unfiltered queries at 1.421. The condition
+variable wake-up and completion barrier cost more than OpenMP's reused team.
+The prototype was left outside the source tree.
+
+## Four-candidate SIMD exact-distance verification
+
+Exact verification was changed to evaluate four selected rows in parallel with
+AVX2 double lanes. Each lane retained the original ordered addition per row,
+so all candidate positions, float candidate distances and returned double
+distances were bitwise identical to the scalar verifier.
+
+The extra non-contiguous vector loads outweighed the parallelism. On 1,000
+alternating same-process queries, total kernel time increased from 0.055896 s
+to 0.059750 s (median paired ratio 1.193), filtered queries increased to 1.267,
+and unfiltered queries were neutral at 0.9989. The prototype was not retained.

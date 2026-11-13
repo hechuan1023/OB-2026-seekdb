@@ -230,6 +230,29 @@ if __name__ == '__main__':
 
 
 class RecordFormatTests(unittest.TestCase):
+    def test_recovery_index_scan_does_not_decode_row_payloads(self):
+        from minivectordb import storage as storage_module
+
+        with tempfile.TemporaryDirectory() as directory:
+            db = Engine(directory)
+            db.execute('CREATE TABLE t(id BIGINT PRIMARY KEY, tag VARCHAR(8), v VECTOR(2))')
+            db.execute("INSERT INTO t VALUES (1,'keep','[1,2]')")
+            table = db.table('t')['id']
+            db.close()
+
+            original = storage_module._decode_row
+            storage_module._decode_row = lambda _: self.fail(
+                'recovery must not materialize compact row payloads')
+            try:
+                reopened = storage_module.Storage(directory)
+            finally:
+                storage_module._decode_row = original
+            try:
+                self.assertIn('t', reopened.schemas)
+                self.assertIsNotNone(reopened.index.get(table, 1))
+            finally:
+                reopened.close()
+
     def test_row_round_trip_and_old_pickle_fallback(self):
         import pickle
         from array import array
