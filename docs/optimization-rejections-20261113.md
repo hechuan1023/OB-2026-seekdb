@@ -534,3 +534,42 @@ The extra non-contiguous vector loads outweighed the parallelism. On 1,000
 alternating same-process queries, total kernel time increased from 0.055896 s
 to 0.059750 s (median paired ratio 1.193), filtered queries increased to 1.267,
 and unfiltered queries were neutral at 0.9989. The prototype was not retained.
+
+## Three-thread exact scan on a two-CPU quota
+
+The exact scan normally uses the cgroup quota directly, which is two workers
+under the local benchmark configuration. A candidate added one extra worker
+for a two-CPU quota. A direct native sweep across five seeds showed mixed
+directions: three workers sometimes reduced the filtered scan, but the
+unfiltered scan was slower in two seeds and the filtered scan was slower in
+two others.
+
+Two full JSONL A/B runs confirmed the instability. The first seven-pair seed
+had a candidate/baseline total-query ratio of 0.961306, while the second seed
+had 1.095942. Peak-memory ratios were 1.001495 and 1.001495, and physical I/O
+was unchanged. The extra worker was reverted.
+
+## Max-heap candidate collector
+
+The sorted small candidate vector was replaced with a max-heap for the
+OpenMP exact scan. A same-snapshot nine-round comparison measured an
+unfiltered candidate/baseline ratio of 1.048233 and filtered ratio of 0.968579.
+A filtered-only heap variant was then tested across five seeds; its filtered
+OpenMP ratios ranged from 0.994501 to 1.031130, with no stable direction. The
+source was not changed.
+
+## In-memory small transaction overlay
+
+The transaction overlay was changed from a file-backed `DiskHash` to a
+small Python dictionary that spilled to the existing disk hash at 4,096
+entries. A first seven-pair write run measured a candidate/baseline median
+ratio of 0.998430, but peak memory was 1.013717 times the baseline and the
+candidate won only 4/7 write pairs. Physical writes fell by 24,576 bytes
+because the small map was no longer zeroed.
+
+An integer-encoded `(table, key)` dictionary variant was then tested. Seven
+alternating pairs measured a write ratio of 1.013509, a peak-memory ratio of
+1.008825, and the same 24,576-byte write reduction. The isolated `_apply`
+stage improved, but the gain did not survive the complete durable write path
+and the memory direction regressed. Both variants and their tests were
+reverted.
