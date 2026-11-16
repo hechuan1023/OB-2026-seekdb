@@ -134,6 +134,8 @@ class NativeKernel:
                 self.search_f32_exact = getattr(self.library, 'mv_topk_f32_exact', None)
                 self.search_f32_exact_omp = getattr(
                     self.library, 'mv_topk_f32_exact_omp', None)
+                self.search_final_omp = getattr(
+                    self.library, 'mv_topk_final_omp', None)
         except AttributeError:
             pass  # Older library: keep the portable kernel.
         self.search.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint64,
@@ -151,6 +153,11 @@ class NativeKernel:
                 self.search.argtypes[:8] + [ctypes.c_uint64] +
                 self.search.argtypes[8:] + [ctypes.c_void_p])
             self.search_f32_exact_omp.restype = ctypes.c_int64
+        if self.search_final_omp is not None:
+            self.search_final_omp.argtypes = (
+                self.search.argtypes[:8] +
+                [ctypes.c_uint64, ctypes.c_void_p, ctypes.c_void_p])
+            self.search_final_omp.restype = ctypes.c_int64
         try:
             sq8_build = self.library.mv_sq8_build
             sq8_search = self.library.mv_sq8_search
@@ -221,6 +228,33 @@ class NativeKernel:
         if returned != keep:
             raise RuntimeError('Native exact search failed')
         return positions, distances, exact
+
+    def topk_final(self, snapshot, query, selected, limit):
+        """Sorted (key, exact distance) candidates, or -2 to fall back.
+
+        The kernel applies the float32 boundary guard and sorts by exact
+        distance/key; the caller still applies the exact-distance guard.
+        Returns None when unavailable or count <= limit (use the normal path).
+        """
+        count = snapshot.count if selected is None else len(selected)
+        if count <= limit:
+            return None
+        if type(query) is not array:
+            query = array('f', query)
+        size = min(limit + 2, count)
+        keys_out = array('q', [0]) * size
+        exact_out = array('d', [0]) * size
+        returned = self.search_final_omp(
+            self.address(snapshot.vectors), self.address(snapshot.keys),
+            snapshot.count, snapshot.dimensions, query.buffer_info()[0],
+            selected.buffer_info()[0] if selected is not None else None,
+            count, limit, self.search_threads,
+            keys_out.buffer_info()[0], exact_out.buffer_info()[0])
+        if returned == -2:
+            return -2
+        if returned < 0:
+            return None
+        return keys_out, exact_out, returned
 
     def build_sq8(self, snapshot):
         if self.sq8_build is None:
@@ -686,6 +720,23 @@ class VectorIndexes:
         use_sq8 = (
             mode == 'ann' and snapshot.ensure_sq8(self.kernel) is not None and
             (not conditions or len(selected) >= SQ8_FILTER_MIN_ROWS))
+        if (pk_only and not deleted and not use_sq8
+                and self.kernel.search_final_omp is not None):
+            # The kernel returns candidates already sorted by exact distance
+            # and key, so skip the per-candidate Python verification and sort.
+            final = self.kernel.topk_final(snapshot, expression[2], selected, limit)
+            if final is not None and final != -2:
+                keys_out, exact_out, keep_n = final
+                if keep_n > limit:
+                    a, b = exact_out[limit - 1], exact_out[limit]
+                    if b - a <= max(abs(a), abs(b)) * 1e-12 + 1e-300:
+                        self.fallbacks += 1
+                        return None
+                self.searches += 1
+                return list(zip(keys_out[:limit], exact_out[:limit]))
+            # -2 (ambiguous float32 boundary) or None: fall through to the
+            # existing path, which resolves it with the native double kernel
+            # rather than the much slower generic executor.
         if use_sq8:
             requested = min(keep, available)
             candidates = max(SQ8_CANDIDATES, keep * 2)

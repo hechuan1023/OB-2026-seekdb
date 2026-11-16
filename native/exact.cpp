@@ -759,6 +759,61 @@ mv_topk_f32_exact_omp(
   }
 }
 
+// Final TopK results sorted by (exact distance, primary key), with the float32
+// candidate boundary guard applied here. Reuses the OpenMP candidate scan and
+// its exact distances, then sorts and resolves keys so the caller can skip the
+// per-candidate Python verification loop. The exact-distance boundary guard
+// stays in Python. keys_out/exact_out hold min(limit+2, count) entries. Returns
+// the sorted candidate count, -2 on an ambiguous float32 boundary (fall back),
+// -1 on error or count <= limit.
+MV_EXPORT __attribute__((target("avx2,fma"))) std::int64_t
+mv_topk_final_omp(
+    const float *__restrict vectors, const std::int64_t *__restrict keys,
+    std::uint64_t rows, std::uint64_t dimensions, const float *__restrict query,
+    const std::uint64_t *__restrict selection, std::uint64_t selected,
+    std::uint64_t limit, std::uint64_t threads,
+    std::int64_t *__restrict keys_out, double *__restrict exact_out) noexcept {
+  if (!vectors || !keys || !query || !keys_out || !exact_out || !dimensions ||
+      !limit || !threads)
+    return -1;
+  const std::uint64_t count = selection ? selected : rows;
+  if (count <= limit) return -1;
+  const std::uint64_t keep = limit + 1;
+  const std::uint64_t requested = std::min(keep + 1, count);
+  try {
+    std::vector<std::uint64_t> pos(requested);
+    std::vector<double> f32d(requested), ex(requested);
+    const std::int64_t got = mv_topk_f32_exact_omp(
+        vectors, keys, rows, dimensions, query, selection, selected, requested,
+        threads, pos.data(), f32d.data(), ex.data());
+    if (got != static_cast<std::int64_t>(requested)) return -1;
+    std::uint64_t keep_n = requested;
+    if (requested < count) {
+      const double error =
+          std::min(0.25, static_cast<double>(dimensions + 1) * 2.4e-7);
+      const double slack = static_cast<double>(dimensions + 1) * 6e-45;
+      const double threshold = f32d[keep - 1];
+      if (!(f32d[requested - 1] > threshold * (1.0 + 4.0 * error) + 4.0 * slack))
+        return -2;
+      keep_n = keep;
+    }
+    struct Cand { double d; std::int64_t key; };
+    std::vector<Cand> cands(keep_n);
+    for (std::uint64_t i = 0; i < keep_n; ++i)
+      cands[i] = Cand{ex[i], keys[pos[i]]};
+    std::sort(cands.begin(), cands.end(), [](const Cand &a, const Cand &b) {
+      return a.d < b.d || (a.d == b.d && a.key < b.key);
+    });
+    for (std::uint64_t i = 0; i < keep_n; ++i) {
+      keys_out[i] = cands[i].key;
+      exact_out[i] = cands[i].d;
+    }
+    return static_cast<std::int64_t>(keep_n);
+  } catch (...) {
+    return -1;
+  }
+}
+
 MV_EXPORT int mv_has_fma() {
   return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma");
 }
