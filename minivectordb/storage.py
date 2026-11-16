@@ -591,8 +591,10 @@ class Storage:
         self.stage.truncate(end)
         self.schemas = schemas
         self.overlay.reset()
-        for offset, record, _ in records_buffered(self.stage, 0, end):
-            if record[0] == 'row':
+        # Rebuilding the overlay only needs table/key/offset/live; scan metadata
+        # without decoding row payloads, like commit and recovery do.
+        for offset, record, _ in records_metadata(self.stage, 0, end):
+            if record[0] in ('row', 'rowmeta'):
                 self._apply(record, offset, self.overlay)
         self.stage.seek(end)
 
@@ -623,7 +625,10 @@ class Storage:
         write_all(self.wal, TRAILER.pack(b'DONE', end))
         os.fsync(self.wal.fileno())
         failpoint('after_commit_sync')
-        for offset, record, length in records_buffered(self.wal, start, start + end):
+        # Applying to the index only needs table/key/offset/live, not the row
+        # payload; scan metadata like recovery does instead of decoding every
+        # committed string and vector.
+        for offset, record, length in records_metadata(self.wal, start, start + end):
             self._apply(record, offset, self.index, length)
         self._finish()
         wal_bytes = os.fstat(self.wal.fileno()).st_size

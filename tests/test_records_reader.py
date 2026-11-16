@@ -89,5 +89,74 @@ class BufferedRecordsTests(unittest.TestCase):
         store.close()
 
 
+class CommitMetadataScanTests(unittest.TestCase):
+    def test_commit_applies_index_without_decoding_row_payloads(self):
+        from minivectordb import storage as storage_module
+        from minivectordb.engine import Engine
+
+        with tempfile.TemporaryDirectory() as directory:
+            db = Engine(directory)
+            db.execute('CREATE TABLE t(id BIGINT PRIMARY KEY, tag VARCHAR(8), v VECTOR(2))')
+            db.execute("INSERT INTO t VALUES (1,'a','[1,2]'),(2,'b','[3,4]'),(3,'c','[5,6]')")
+            table = db.table('t')['id']
+            db.execute('BEGIN')
+            db.execute("INSERT INTO t VALUES (4,'d','[7,8]')")
+            db.execute("UPDATE t SET tag='z', v='[9,9]' WHERE id=2")
+            db.execute('DELETE FROM t WHERE id=3')
+            original = storage_module._decode_row
+            storage_module._decode_row = lambda _: self.fail(
+                'commit must not materialize compact row payloads')
+            try:
+                db.execute('COMMIT')
+            finally:
+                storage_module._decode_row = original
+            try:
+                rows = {row[0]: row for row in
+                        db.execute('SELECT id,tag,v FROM t ORDER BY id').rows}
+                self.assertEqual(sorted(rows), [1, 2, 4])
+                self.assertEqual(rows[2][1], 'z')
+                self.assertEqual(list(rows[2][2]), [9.0, 9.0])
+                self.assertEqual(list(rows[4][2]), [7.0, 8.0])
+                self.assertIsNone(db.storage.get(table, 3))
+                self.assertLess(db.storage.index.get(table, 3), 0)
+                # live_bytes must equal the serialized size of current live
+                # versions, computed independently from the index and WAL headers.
+                expected = 0
+                for _, key, offset in db.storage.index.entries(table):
+                    if offset > 0:
+                        db.storage.wal.seek(offset - 1)
+                        expected += LENGTH.unpack(
+                            db.storage.wal.read(LENGTH.size))[0] + LENGTH.size
+                self.assertEqual(db.storage.live_bytes, expected)
+            finally:
+                db.close()
+
+    def test_restore_rebuilds_overlay_without_decoding_row_payloads(self):
+        from array import array
+        from minivectordb import storage as storage_module
+
+        with tempfile.TemporaryDirectory() as directory:
+            s = storage_module.Storage(directory)
+            s.begin()
+            s.append(('schema', 't', {'id': 1, 'pk': 0, 'indexes': {},
+                                      'columns': [('id', 'BIGINT', 0), ('v', 'VECTOR', 2)]}))
+            s.append(('row', 1, 1, (1, array('f', [1.0, 2.0]))))
+            savepoint = s.savepoint()
+            s.append(('row', 1, 2, (2, array('f', [3.0, 4.0]))))
+            s.append(('row', 1, 1, None))
+            original = storage_module._decode_row
+            storage_module._decode_row = lambda _: self.fail(
+                'restore must not materialize compact row payloads')
+            try:
+                s.restore(savepoint)
+            finally:
+                storage_module._decode_row = original
+            try:
+                self.assertGreater(s.overlay.get(1, 1), 0)
+                self.assertIsNone(s.overlay.get(1, 2))
+            finally:
+                s.close()
+
+
 if __name__ == '__main__':
     unittest.main()
